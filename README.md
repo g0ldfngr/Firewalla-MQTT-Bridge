@@ -1,9 +1,6 @@
 # Firewalla MQTT Bridge
 
-Bridge Firewalla network telemetry into Home Assistant. Two installation options:
-
-1. **Supervisor Add-on** — Node.js container that publishes Firewalla data to MQTT
-2. **HACS Integration** — Python component that consumes MQTT data and creates native HA entities
+Bridge Firewalla network telemetry into Home Assistant.
 
 ## Architecture
 
@@ -19,7 +16,9 @@ Home Assistant (HACS integration → sensors, binary sensors, device trackers)
 
 ## Installation
 
-### Option 1: Supervisor Add-on (recommended)
+### Step 1: Install the Bridge (Supervisor Add-on)
+
+The bridge publishes Firewalla data to MQTT. Install it from the Supervisor Add-on Store:
 
 1. Add this repository to your Home Assistant Supervisor:
    ```
@@ -34,12 +33,16 @@ Home Assistant (HACS integration → sensors, binary sensors, device trackers)
    - `etp_token.txt`
 5. Start the add-on
 
-### Option 2: HACS Integration
+### Step 2: Install the HACS Integration
 
-1. Install via HACS → Custom Repositories → add this repo
-2. Restart Home Assistant
-3. Go to Settings → Devices & Services → Add Integration → "Firewalla MQTT Bridge"
-4. Configure your MQTT broker and Firewalla IP
+The integration consumes MQTT data and creates native HA entities. **Use the `hacs` branch:**
+
+1. In HACS → Custom Repositories → add this repo
+2. Set the **repository type** to `integration`
+3. Set the **branch** to `hacs`
+4. Install and restart Home Assistant
+5. Go to Settings → Devices & Services → Add Integration → "Firewalla MQTT Bridge"
+6. Configure your MQTT broker and Firewalla IP
 
 ## MQTT Topics
 
@@ -106,3 +109,5 @@ Home Assistant (HACS integration → sensors, binary sensors, device trackers)
 - Health check verifies MQTT connectivity
 - Credentials are mounted via the config share (read-only)
 - HACS integration requires the add-on (or any Firewalla-to-MQTT bridge) running
+- **Branch `main`** — Supervisor add-on only
+- **Branch `hacs`** — HACS integration only (clean `custom_components/` layout)
