@@ -1,0 +1,42 @@
+{
+  "name": "Firewalla MQTT Bridge",
+  "slug": "firewalla-mqtt-bridge",
+  "version": "1.0.0",
+  "stage": "stable",
+  "arch": ["armhf", "armv7", "aarch64", "amd64"],
+  "description": "Bridges Firewalla network data to MQTT for Home Assistant dashboards",
+  "url": "https://github.com/adamradloff/network-ops",
+  "startup": "application",
+  "boot": "auto",
+  "ports": {},
+  "ports_description": {},
+  "host_network": true,
+  "host_pid": false,
+  "host_dbus": false,
+  "devicetree": false,
+  "apparmor": false,
+  "hassio_api": false,
+  "hassio_role": "default",
+  "homeassistant_api": false,
+  "map": ["config:rw"],
+  "options": {
+    "mqtt_broker": "10.100.255.22",
+    "mqtt_port": 1833,
+    "mqtt_prefix": "firewalla",
+    "mqtt_username": "mosquitto",
+    "mqtt_password": "Apple!B0wling12",
+    "firewalla_ip": "10.100.255.1",
+    "collect_interval": 60
+  },
+  "schema": {
+    "mqtt_broker": "str",
+    "mqtt_port": "port",
+    "mqtt_prefix": "str",
+    "mqtt_username": "str",
+    "mqtt_password": "str",
+    "firewalla_ip": "ip_addr",
+    "collect_interval": "int(30,3600)"
+  },
+  "image": "goldfinger/{name}-{{arch}}",
+  "init": false
+}

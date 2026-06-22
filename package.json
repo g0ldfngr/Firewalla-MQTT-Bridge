@@ -1,0 +1,11 @@
+{
+  "name": "firewalla-mqtt-bridge",
+  "version": "1.0.0",
+  "description": "Bridges Firewalla network data to MQTT for Home Assistant",
+  "type": "module",
+  "main": "firewalla-mqtt-bridge.mjs",
+  "dependencies": {
+    "mqtt": "^5.10.4",
+    "node-firewalla": "^1.2.1"
+  }
+}
