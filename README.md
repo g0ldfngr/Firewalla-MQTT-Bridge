@@ -43,7 +43,7 @@ A Home Assistant Supervisor add-on that bridges Firewalla network data to an MQT
 
 1. Add this repository to your Home Assistant Supervisor:
    ```
-   https://github.com/adamradloff/network-ops
+  [ [https://github.com/adamradloff/network-ops](https://github.com/g0ldfngr/Firewalla-MQTT-Bridge)](https://github.com/g0ldfngr/Firewalla-MQTT-Bridge)
    ```
 
 2. Install the "Firewalla MQTT Bridge" add-on
