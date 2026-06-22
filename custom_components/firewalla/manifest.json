@@ -1,0 +1,13 @@
+{
+  "domain": "firewalla",
+  "name": "Firewalla MQTT Bridge",
+  "codeowners": ["@g0ldfngr"],
+  "config_flow": true,
+  "dependencies": ["mqtt"],
+  "documentation": "https://github.com/g0ldfngr/Firewalla-MQTT-Bridge",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/g0ldfngr/Firewalla-MQTT-Bridge/issues",
+  "loggers": ["custom_components.firewalla"],
+  "requirements": ["paho-mqtt>=1.6.0"],
+  "version": "1.0.0"
+}

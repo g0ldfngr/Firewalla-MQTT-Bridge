@@ -1,15 +1,45 @@
 # Firewalla MQTT Bridge
 
-A Home Assistant Supervisor add-on that bridges Firewalla network data to an MQTT broker for Home Assistant dashboards.
+Bridge Firewalla network telemetry into Home Assistant. Two installation options:
 
-## Features
+1. **Supervisor Add-on** — Node.js container that publishes Firewalla data to MQTT
+2. **HACS Integration** — Python component that consumes MQTT data and creates native HA entities
 
-- **Real-time network monitoring**: Throughput, connections, device status
-- **Device inventory**: Online/offline status, traffic counters, open ports
-- **Security alerts**: Firewalla alarms and events
-- **Data usage**: Monthly and yearly bandwidth statistics
-- **Speedtest results**: Latest and historical speedtest data
-- **Box health**: Model, version, uptime, public IP
+## Architecture
+
+```
+Firewalla Box (10.100.255.1)
+    ↓ node-firewalla library (ETP API, port 8833)
+Firewalla-to-MQTT Bridge (Supervisor add-on)
+    ↓ MQTT publish (QoS 1, retain)
+MQTT Broker (e.g. mosquitto on 10.100.255.22:1833)
+    ↓ MQTT subscribe
+Home Assistant (HACS integration → sensors, binary sensors, device trackers)
+```
+
+## Installation
+
+### Option 1: Supervisor Add-on (recommended)
+
+1. Add this repository to your Home Assistant Supervisor:
+   ```
+   https://github.com/g0ldfngr/Firewalla-MQTT-Bridge
+   ```
+2. Install the "Firewalla MQTT Bridge" add-on
+3. Configure the add-on settings (MQTT broker, Firewalla IP, etc.)
+4. Copy your Firewalla credentials to the add-on's config share:
+   - `etp.private.pem`
+   - `etp.public.pem`
+   - `fwgroup.json`
+   - `etp_token.txt`
+5. Start the add-on
+
+### Option 2: HACS Integration
+
+1. Install via HACS → Custom Repositories → add this repo
+2. Restart Home Assistant
+3. Go to Settings → Devices & Services → Add Integration → "Firewalla MQTT Bridge"
+4. Configure your MQTT broker and Firewalla IP
 
 ## MQTT Topics
 
@@ -27,6 +57,36 @@ A Home Assistant Supervisor add-on that bridges Firewalla network data to an MQT
 | `firewalla/network/speedtest` | Speedtest results |
 | `firewalla/network/box_info` | Box identity and features |
 
+## HACS Entities Created
+
+### Sensors
+- Public IP, Connection Type
+- Download/Upload Speed (Mbps)
+- Active/Total Connections
+- Online/Offline/Total Devices
+- Active Alarms
+- Uptime, Model, Version
+- Download/Upload Usage (Bytes)
+- Speedtest Download/Upload/Latency
+
+### Binary Sensors
+- Cloud Connected
+- Booting Complete
+- Per-device Online status
+
+### Device Trackers
+- Per-device presence detection (source_type: router)
+
+### Text Entities
+- Per-device name
+
+### Number Entities
+- Collect Interval (30-3600s)
+
+### Services
+- `firewalla.rescan` — Force a data refresh
+- `firewalla.force_update` — Force all entities to update
+
 ## Configuration
 
 | Option | Default | Description |
@@ -39,41 +99,10 @@ A Home Assistant Supervisor add-on that bridges Firewalla network data to an MQT
 | `firewalla_ip` | `10.100.255.1` | Firewalla box IP |
 | `collect_interval` | `60` | Collection interval in seconds |
 
-## Installation
-
-1. Add this repository to your Home Assistant Supervisor:
-   ```
-  (https://github.com/g0ldfngr/Firewalla-MQTT-Bridge)
-   ```
-
-2. Install the "Firewalla MQTT Bridge" add-on
-
-3. Configure the add-on settings (MQTT broker, Firewalla IP, etc.)
-
-4. Copy your Firewalla credentials to the add-on's config share:
-   - `etp.private.pem`
-   - `etp.public.pem`
-   - `fwgroup.json`
-   - `etp_token.txt`
-
-5. Start the add-on
-
-## Home Assistant Integration
-
-Once the add-on is running, configure Home Assistant's MQTT integration to subscribe to the `firewalla/` topics. You can then create sensors, dashboards, and automations using the data.
-
-Example sensor configuration:
-```yaml
-sensor:
-  - name: "Firewalla Download Speed"
-    state_topic: "firewalla/network/live_stats"
-    value_template: "{{ value_json.downloadMbps }}"
-    unit_of_measurement: "Mbps"
-```
-
 ## Notes
 
 - The add-on runs as a non-root user for security
 - No ports are exposed externally (publisher-only)
 - Health check verifies MQTT connectivity
 - Credentials are mounted via the config share (read-only)
+- HACS integration requires the add-on (or any Firewalla-to-MQTT bridge) running
