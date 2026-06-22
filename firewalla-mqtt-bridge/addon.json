@@ -38,5 +38,6 @@
     "collect_interval": "int(30,3600)"
   },
   "image": "goldfinger/{name}-{{arch}}",
+  "codenotif": "adam@adamradloff.com",
   "init": false
 }
