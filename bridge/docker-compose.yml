@@ -1,0 +1,16 @@
+services:
+  firewalla-mqtt-bridge:
+    build: .
+    container_name: firewalla-mqtt-bridge
+    restart: unless-stopped
+    environment:
+      MQTT_BROKER:        ${MQTT_BROKER:-tcp://10.100.255.22:1883}
+      MQTT_PREFIX:        ${MQTT_PREFIX:-firewalla}
+      MQTT_USERNAME:      ${MQTT_USERNAME:-}
+      MQTT_PASSWORD:      ${MQTT_PASSWORD:-}
+      FIREWALLA_IP:       ${FIREWALLA_IP:-10.100.255.1}
+      COLLECT_INTERVAL:   ${COLLECT_INTERVAL:-60}
+      FIREWALLA_KEYS_DIR: /app/credentials
+    volumes:
+      - ./credentials:/app/credentials:ro
+    network_mode: bridge
