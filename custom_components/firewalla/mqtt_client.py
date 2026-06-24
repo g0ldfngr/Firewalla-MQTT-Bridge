@@ -20,7 +20,9 @@ from .const import (
     TOPIC_LIVE_STATS,
     TOPIC_SPEEDTEST,
     TOPIC_STATUS,
+    TOPIC_SYSTEM_METRICS,
     TOPIC_USAGE,
+    TOPIC_WAN,
 )
 
 if TYPE_CHECKING:
@@ -61,8 +63,13 @@ class FirewallaMQTTClient:
             f"{prefix}/{TOPIC_ALARMS}",
             f"{prefix}/{TOPIC_USAGE}",
             f"{prefix}/{TOPIC_SPEEDTEST}",
+            f"{prefix}/{TOPIC_SPEEDTEST}/#",
             f"{prefix}/{TOPIC_BOX_INFO}",
             f"{prefix}/{TOPIC_BOX_FEATURES}",
+            f"{prefix}/{TOPIC_WAN}",
+            f"{prefix}/{TOPIC_WAN}/#",
+            f"{prefix}/{TOPIC_SYSTEM_METRICS}",
+            f"{prefix}/network/live_stats/wan/#",
         ]
         for topic in topics:
             unsub = await mqtt.async_subscribe(self._hass, topic, self._on_message, qos=1)

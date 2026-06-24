@@ -153,6 +153,23 @@ async function collectBoxInfo(fwGroup) {
     timestamp:         new Date().toISOString(),
   });
 
+  // Per-WAN live stats using networkMetrics rx/tx median (bytes/sec → Mbps)
+  const publicIpsMap = initState.publicIps || {};
+  for (const [iface, stats] of Object.entries(netMetrics)) {
+    if (!publicIpsMap[iface]) continue; // Only WAN interfaces
+    const dlMbps = stats?.rx?.median
+      ? parseFloat((parseInt(stats.rx.median) * 8 / 1_000_000).toFixed(3)) : 0;
+    const ulMbps = stats?.tx?.median
+      ? parseFloat((parseInt(stats.tx.median) * 8 / 1_000_000).toFixed(3)) : 0;
+    const safeName = iface.replace(/[^a-zA-Z0-9_]/g, '_');
+    await publish(`network/live_stats/wan/${safeName}`, {
+      downloadMbps: dlMbps,
+      uploadMbps:   ulMbps,
+      publicIp:     publicIpsMap[iface] || null,
+      timestamp:    new Date().toISOString(),
+    });
+  }
+
   // System health metrics
   await publish('system/metrics', {
     memUsagePct:  parseFloat(((sysMetrics.memUsage ?? 0) * 100).toFixed(1)),
