@@ -153,10 +153,10 @@ async function collectBoxInfo(fwGroup) {
     timestamp:         new Date().toISOString(),
   });
 
-  // Per-WAN live stats using networkMetrics rx/tx median (bytes/sec → Mbps)
+  // Per-interface live stats using networkMetrics rx/tx median (bytes/sec → Mbps)
   const publicIpsMap = initState.publicIps || {};
   for (const [iface, stats] of Object.entries(netMetrics)) {
-    if (!publicIpsMap[iface]) continue; // Only WAN interfaces
+    if (!stats?.rx && !stats?.tx) continue;
     const dlMbps = stats?.rx?.median
       ? parseFloat((parseInt(stats.rx.median) * 8 / 1_000_000).toFixed(3)) : 0;
     const ulMbps = stats?.tx?.median
