@@ -362,7 +362,7 @@ async function collectAlarms(fwGroup) {
   await publish('network/alarms', alarmList);
 }
 
-async function collectUsage(fwGroup) {
+async function collectUsage(fwGroup, initState = {}) {
   const ns = new NetworkService(fwGroup);
 
   try {
@@ -387,18 +387,28 @@ async function collectUsage(fwGroup) {
     console.log('[Usage] Error fetching monthly data:', e.message);
   }
 
-  // Per-WAN monthly usage via undocumented firmware endpoint
+  // Per-WAN monthly usage via firmware endpoint (returns data keyed by WAN UUID)
   try {
+    // Build UUID → intf name map from networkProfiles
+    const networkProfiles = initState.networkProfiles || {};
+    const uuidToIntf = {};
+    const profiles = Array.isArray(networkProfiles) ? networkProfiles : Object.values(networkProfiles);
+    for (const p of profiles) {
+      if (p.uuid && p.intf) uuidToIntf[p.uuid] = p.intf;
+    }
+
     const wanUsage = await FWGroupApi.sendMessageToBox(
       fwGroup, new FWGetMessage('monthlyDataUsageOnWans')
     );
     if (wanUsage && typeof wanUsage === 'object') {
       for (const [uuid, data] of Object.entries(wanUsage)) {
         if (!data || (data.totalUpload == null && data.totalDownload == null)) continue;
+        const intf      = uuidToIntf[uuid] || uuid;
+        const safeName  = intf.replace(/[^a-zA-Z0-9_]/g, '_');
         const beginDate = data.monthlyBeginTs ? new Date(data.monthlyBeginTs * 1000) : null;
-        const safeName  = uuid.replace(/[^a-zA-Z0-9_]/g, '_');
         await publish(`network/usage/wan/${safeName}`, {
-          wan:           uuid,
+          wan:           intf,
+          wanUUID:       uuid,
           month:         beginDate ? beginDate.getMonth() + 1 : null,
           year:          beginDate ? beginDate.getFullYear()  : null,
           monthStart:    beginDate ? beginDate.toISOString()  : null,
@@ -507,7 +517,7 @@ async function runCollection() {
   await collectAlarms(fwGroup);
 
   console.log('[Bridge] Collecting usage...');
-  await collectUsage(fwGroup);
+  await collectUsage(fwGroup, initState);
 
   console.log('[Bridge] Collecting speedtest results...');
   await collectSpeedtest(fwGroup, initState);
