@@ -155,31 +155,21 @@ async function collectBoxInfo(fwGroup) {
     timestamp:         new Date().toISOString(),
   });
 
-  // Per-interface live stats using networkMetrics rx/tx median (bytes/sec → Mbps)
-  // Build intf→publicIp lookup from networkProfiles so publicIp is correct here too
+  // Per-WAN live stats using networkMetrics rx/tx median (bytes/sec → Mbps).
+  // publicIps is keyed by intf name (eth0/eth1), so publicIpsMap[iface] gives
+  // the public IP and also serves as the WAN filter (skips internal interfaces).
   const publicIpsMap = initState.publicIps || {};
-  const networkProfiles = initState.networkProfiles || {};
-  const profiles = Array.isArray(networkProfiles) ? networkProfiles : Object.values(networkProfiles);
-  const intfToPublicIp = {};
-  for (const p of profiles) {
-    if (p.intf && p.uuid && publicIpsMap[p.uuid]) {
-      intfToPublicIp[p.intf] = publicIpsMap[p.uuid];
-    }
-  }
-  const wanIfaceNames = Object.keys(netMetrics).filter(k => k.match(/^eth\d+$/));
-  console.log(`[LiveStats] networkMetrics interfaces: [${Object.keys(netMetrics).join(', ')}], WAN candidates: [${wanIfaceNames.join(', ')}]`);
   for (const [iface, stats] of Object.entries(netMetrics)) {
-    if (!stats?.rx && !stats?.tx) continue;
+    if (!publicIpsMap[iface]) continue;
     const dlMbps = stats?.rx?.median
       ? parseFloat((parseInt(stats.rx.median) * 8 / 1_000_000).toFixed(3)) : 0;
     const ulMbps = stats?.tx?.median
       ? parseFloat((parseInt(stats.tx.median) * 8 / 1_000_000).toFixed(3)) : 0;
     const safeName = iface.replace(/[^a-zA-Z0-9_]/g, '_');
-    console.log(`[LiveStats] ${iface}: dl=${dlMbps} Mbps, ul=${ulMbps} Mbps`);
     await publish(`network/live_stats/wan/${safeName}`, {
       downloadMbps: dlMbps,
       uploadMbps:   ulMbps,
-      publicIp:     intfToPublicIp[iface] || null,
+      publicIp:     publicIpsMap[iface],
       timestamp:    new Date().toISOString(),
     });
   }
