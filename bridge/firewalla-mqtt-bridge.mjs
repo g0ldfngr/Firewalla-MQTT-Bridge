@@ -2,9 +2,7 @@
 /**
  * Firewalla-to-MQTT Bridge
  *
- * Pulls data from the Firewalla box API and publishes to an MQTT broker.
- *
- * Topics:
+ * Topics published:
  *   firewalla/box_info              - Box identity & features
  *   firewalla/box/features          - Runtime feature flags
  *   firewalla/network/status        - Overall network health
@@ -17,6 +15,8 @@
  *   firewalla/network/usage
  *   firewalla/network/usage/yearly
  *   firewalla/network/speedtest
+ *   firewalla/network/wan           - All WAN interfaces summary
+ *   firewalla/network/wan/<uuid>    - Per-WAN interface detail
  */
 
 import mqtt from 'mqtt';
@@ -41,6 +41,9 @@ const MQTT_PASSWORD    = process.env.MQTT_PASSWORD    || '';
 const FIREWALLA_IP     = process.env.FIREWALLA_IP     || '10.100.255.1';
 const COLLECT_INTERVAL = parseInt(process.env.COLLECT_INTERVAL || '60', 10);
 const KEYS_DIR         = process.env.FIREWALLA_KEYS_DIR || '/app/credentials';
+
+// Device is considered online if last seen within 30 minutes
+const ONLINE_THRESHOLD_MS = 30 * 60 * 1000;
 
 // ── Load Credentials ───────────────────────────────────────────────────────
 
@@ -98,11 +101,14 @@ async function publish(topic, payload) {
 async function collectBoxInfo(fwGroup) {
   const init      = new InitService(fwGroup);
   const initState = await init.init();
-  // liveStats returns code 500 on some Firewalla models — skip silently
+
+  // liveStats returns code 500 on some models — always publish (zeroed on failure)
   let liveStats = null;
   try {
     liveStats = await init.liveStats();
-  } catch (_) {}
+  } catch (e) {
+    console.log('[LiveStats] Error:', e.message);
+  }
 
   await publish('box_info', {
     model:           initState.model,
@@ -126,15 +132,14 @@ async function collectBoxInfo(fwGroup) {
     timestamp:      new Date().toISOString(),
   });
 
-  if (liveStats) {
-    await publish('network/live_stats', {
-      downloadMbps:      liveStats.downloadMbps      || 0,
-      uploadMbps:        liveStats.uploadMbps        || 0,
-      activeConnections: liveStats.activeConnections  || 0,
-      totalConnections:  liveStats.totalConnections   || 0,
-      timestamp:         new Date().toISOString(),
-    });
-  }
+  // Always publish live_stats with current timestamp so it doesn't go stale
+  await publish('network/live_stats', {
+    downloadMbps:      liveStats?.downloadMbps      ?? 0,
+    uploadMbps:        liveStats?.uploadMbps        ?? 0,
+    activeConnections: liveStats?.activeConnections  ?? 0,
+    totalConnections:  liveStats?.totalConnections   ?? 0,
+    timestamp:         new Date().toISOString(),
+  });
 
   const features = initState.runtimeFeatures || {};
   await publish('box/features', {
@@ -142,21 +147,80 @@ async function collectBoxInfo(fwGroup) {
     unbound:       !!features.unbound,
     safeSearch:    !!features.safeSearch,
     familyProtect: !!features.familyProtect,
+    dualWan:       !!features.dual_wan,
     timestamp:     new Date().toISOString(),
+  });
+
+  return initState;
+}
+
+async function collectWAN(initState) {
+  const publicIps      = initState.publicIps      || {};
+  const networkProfiles = initState.networkProfiles;
+  const virtWanGroups  = initState.virtWanGroups  || [];
+
+  // networkProfiles can be an object keyed by UUID or an array
+  const profileMap = {};
+  if (Array.isArray(networkProfiles)) {
+    for (const p of networkProfiles) {
+      profileMap[p.uuid] = p;
+    }
+  } else if (networkProfiles && typeof networkProfiles === 'object') {
+    Object.assign(profileMap, networkProfiles);
+  }
+
+  const wans = [];
+  for (const [uuid, publicIp] of Object.entries(publicIps)) {
+    const profile = profileMap[uuid] || {};
+    const wan = {
+      uuid,
+      name:       profile.name       || profile.intf  || uuid,
+      intf:       profile.intf       || uuid,
+      publicIp,
+      connType:   profile.conn_type  || 'unknown',
+      active:     profile.active     ?? true,
+      ready:      profile.ready      ?? true,
+      gateway:    profile.gateway_ip || profile.gateway || null,
+      dns:        Array.isArray(profile.dns) ? profile.dns.join(',') : (profile.dns || null),
+      timestamp:  new Date().toISOString(),
+    };
+    wans.push(wan);
+
+    const safeName = uuid.replace(/[^a-zA-Z0-9]/g, '_');
+    await publish(`network/wan/${safeName}`, wan);
+  }
+
+  // Also expose virtWanGroups (load-balancing / failover config)
+  const wanGroups = virtWanGroups.map(g => ({
+    uuid:      g.uuid,
+    name:      g.name,
+    type:      g.type,   // 'primary_standby' | 'load_balance' etc.
+    ready:     g.ready,
+    active:    g.active,
+    wans:      (g.wans || []).map(w => w.uuid || w),
+  }));
+
+  await publish('network/wan', {
+    count:     wans.length,
+    interfaces: wans,
+    groups:    wanGroups,
+    timestamp: new Date().toISOString(),
   });
 }
 
 async function collectHosts(fwGroup) {
   const hs       = new HostService(fwGroup);
   const hosts    = await hs.getAll();
-  const hostList = hosts.hosts || [];
+  const hostList = hosts.hosts || hosts || [];
 
   const onlineDevices  = [];
   const offlineDevices = [];
 
   for (const h of hostList) {
-    const isOnline = h.lastActive &&
-      (Date.now() - new Date(h.lastActive).getTime() < 300_000); // 5 min
+    // lastActive is a Unix timestamp in seconds (float) — multiply by 1000 for ms
+    const lastActiveMs = h.lastActive ? h.lastActive * 1000 : 0;
+    const isOnline = lastActiveMs > 0 && (Date.now() - lastActiveMs < ONLINE_THRESHOLD_MS);
+
     const device = {
       name:       h.name || h.dhcpName || h.bonjourName || 'Unknown',
       ip:         h.ip,
@@ -164,8 +228,8 @@ async function collectHosts(fwGroup) {
       mac:        h.mac,
       vendor:     h.macVendor || 'Unknown',
       interface:  h.intf || 'unknown',
-      lastSeen:   h.lastActive,
-      firstFound: h.firstFound,
+      lastSeen:   lastActiveMs ? new Date(lastActiveMs).toISOString() : null,
+      firstFound: h.firstFound ? new Date(h.firstFound * 1000).toISOString() : null,
       online:     isOnline,
       traffic: {
         uploadBytes:   h.flowsummary?.outbytes || 0,
@@ -243,11 +307,20 @@ async function collectUsage(fwGroup) {
 
   try {
     const monthly = await ns.getMonthlyDataUsage();
+    // API returns totalUpload/totalDownload (bytes) and monthlyBeginTs/monthlyEndTs (epoch seconds)
+    const beginDate = monthly?.monthlyBeginTs
+      ? new Date(monthly.monthlyBeginTs * 1000)
+      : null;
+
     await publish('network/usage', {
-      month:         monthly?.month || 'unknown',
-      year:          monthly?.year  || 'unknown',
-      uploadBytes:   monthly?.upload   || 0,
-      downloadBytes: monthly?.download || 0,
+      month:         beginDate ? beginDate.getMonth() + 1 : null,
+      year:          beginDate ? beginDate.getFullYear()  : null,
+      monthStart:    beginDate ? beginDate.toISOString()  : null,
+      uploadBytes:   monthly?.totalUpload   || 0,
+      downloadBytes: monthly?.totalDownload || 0,
+      // Daily breakdown arrays: [[epoch_sec, bytes], ...]
+      uploadDaily:   Array.isArray(monthly?.upload)   ? monthly.upload   : [],
+      downloadDaily: Array.isArray(monthly?.download) ? monthly.download : [],
       timestamp:     new Date().toISOString(),
     });
   } catch (e) {
@@ -262,28 +335,58 @@ async function collectUsage(fwGroup) {
   }
 }
 
-async function collectSpeedtest(fwGroup) {
+async function collectSpeedtest(fwGroup, initState) {
   const ns = new NetworkService(fwGroup);
   try {
-    // API returns { results: [...] }, not a bare array
     const raw     = await ns.getSpeedtestResults();
     const results = Array.isArray(raw) ? raw : (raw?.results || []);
+
+    const publicIps = initState?.publicIps || {};
+    // Build reverse map: publicIp -> WAN uuid
+    const ipToWan = {};
+    for (const [uuid, ip] of Object.entries(publicIps)) {
+      ipToWan[ip] = uuid;
+    }
 
     const toEntry = r => ({
       downloadMbps: r.result?.download  ?? 0,
       uploadMbps:   r.result?.upload    ?? 0,
       latency:      r.result?.latency   ?? 0,
       jitter:       r.result?.jitter    ?? 0,
+      packetLoss:   r.result?.ploss     ?? 0,
       isp:          r.client?.isp       ?? null,
+      publicIp:     r.client?.publicIp  ?? null,
+      wanUUID:      r.client?.publicIp  ? (ipToWan[r.client.publicIp] || null) : null,
       server:       r.server?.location  ?? null,
       timestamp:    new Date(r.timestamp * 1000).toISOString(),
     });
 
+    const allEntries = results.slice(0, 20).map(toEntry);
+
+    // Group by WAN (by publicIp) to get per-WAN latest
+    const byWan = {};
+    for (const entry of allEntries) {
+      const key = entry.wanUUID || entry.publicIp || 'default';
+      if (!byWan[key]) byWan[key] = [];
+      byWan[key].push(entry);
+    }
+
     await publish('network/speedtest', {
-      latest:    results[0] ? toEntry(results[0]) : null,
-      history:   results.slice(0, 10).map(toEntry),
+      latest:    allEntries[0] || null,
+      history:   allEntries,
+      byWan,
       timestamp: new Date().toISOString(),
     });
+
+    // Publish per-WAN speedtest topics
+    for (const [wanKey, entries] of Object.entries(byWan)) {
+      const safeName = wanKey.replace(/[^a-zA-Z0-9]/g, '_');
+      await publish(`network/speedtest/${safeName}`, {
+        latest:    entries[0] || null,
+        history:   entries,
+        timestamp: new Date().toISOString(),
+      });
+    }
   } catch (e) {
     console.log('[Speedtest] Error:', e.message);
   }
@@ -307,7 +410,10 @@ async function runCollection() {
   );
 
   console.log('[Bridge] Collecting box info...');
-  await collectBoxInfo(fwGroup);
+  const initState = await collectBoxInfo(fwGroup);
+
+  console.log('[Bridge] Collecting WAN interfaces...');
+  await collectWAN(initState);
 
   console.log('[Bridge] Collecting hosts...');
   await collectHosts(fwGroup);
@@ -319,7 +425,7 @@ async function runCollection() {
   await collectUsage(fwGroup);
 
   console.log('[Bridge] Collecting speedtest results...');
-  await collectSpeedtest(fwGroup);
+  await collectSpeedtest(fwGroup, initState);
 
   console.log('[Bridge] Collection complete.');
 }

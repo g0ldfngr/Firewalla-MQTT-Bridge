@@ -25,6 +25,7 @@ TOPIC_USAGE: Final = "network/usage"
 TOPIC_SPEEDTEST: Final = "network/speedtest"
 TOPIC_BOX_INFO: Final = "box_info"
 TOPIC_BOX_FEATURES: Final = "box/features"
+TOPIC_WAN: Final = "network/wan"
 
 # Sensor entity descriptions
 SENSOR_ENTITIES: Final = [
@@ -163,6 +164,97 @@ SENSOR_ENTITIES: Final = [
         "key": "speedtest_latency",
         "name": "Speedtest Latency",
         "topic": TOPIC_SPEEDTEST,
+        "value_template": "{{ value_json.latest.latency if value_json.latest else '' }}",
+        "unit_of_measurement": "ms",
+        "state_class": "measurement",
+    },
+    {
+        "key": "speedtest_jitter",
+        "name": "Speedtest Jitter",
+        "topic": TOPIC_SPEEDTEST,
+        "value_template": "{{ value_json.latest.jitter if value_json.latest else '' }}",
+        "unit_of_measurement": "ms",
+        "state_class": "measurement",
+    },
+    {
+        "key": "speedtest_isp",
+        "name": "Speedtest ISP",
+        "topic": TOPIC_SPEEDTEST,
+        "value_template": "{{ value_json.latest.isp if value_json.latest else '' }}",
+        "entity_category": "diagnostic",
+    },
+    {
+        "key": "wan_count",
+        "name": "WAN Interfaces",
+        "topic": TOPIC_WAN,
+        "value_template": "{{ value_json.count }}",
+        "state_class": "measurement",
+        "entity_category": "diagnostic",
+    },
+    # WAN 1 (eth0) sensors
+    {
+        "key": "wan1_public_ip",
+        "name": "WAN1 Public IP",
+        "topic": "network/wan/eth0",
+        "value_template": "{{ value_json.publicIp }}",
+        "entity_category": "diagnostic",
+    },
+    {
+        "key": "wan1_speedtest_download",
+        "name": "WAN1 Speedtest Download",
+        "topic": "network/speedtest/eth0",
+        "value_template": "{{ value_json.latest.downloadMbps if value_json.latest else '' }}",
+        "unit_of_measurement": "Mbit/s",
+        "device_class": "data_rate",
+        "state_class": "measurement",
+    },
+    {
+        "key": "wan1_speedtest_upload",
+        "name": "WAN1 Speedtest Upload",
+        "topic": "network/speedtest/eth0",
+        "value_template": "{{ value_json.latest.uploadMbps if value_json.latest else '' }}",
+        "unit_of_measurement": "Mbit/s",
+        "device_class": "data_rate",
+        "state_class": "measurement",
+    },
+    {
+        "key": "wan1_speedtest_latency",
+        "name": "WAN1 Speedtest Latency",
+        "topic": "network/speedtest/eth0",
+        "value_template": "{{ value_json.latest.latency if value_json.latest else '' }}",
+        "unit_of_measurement": "ms",
+        "state_class": "measurement",
+    },
+    # WAN 2 (eth1) sensors
+    {
+        "key": "wan2_public_ip",
+        "name": "WAN2 Public IP",
+        "topic": "network/wan/eth1",
+        "value_template": "{{ value_json.publicIp }}",
+        "entity_category": "diagnostic",
+    },
+    {
+        "key": "wan2_speedtest_download",
+        "name": "WAN2 Speedtest Download",
+        "topic": "network/speedtest/eth1",
+        "value_template": "{{ value_json.latest.downloadMbps if value_json.latest else '' }}",
+        "unit_of_measurement": "Mbit/s",
+        "device_class": "data_rate",
+        "state_class": "measurement",
+    },
+    {
+        "key": "wan2_speedtest_upload",
+        "name": "WAN2 Speedtest Upload",
+        "topic": "network/speedtest/eth1",
+        "value_template": "{{ value_json.latest.uploadMbps if value_json.latest else '' }}",
+        "unit_of_measurement": "Mbit/s",
+        "device_class": "data_rate",
+        "state_class": "measurement",
+    },
+    {
+        "key": "wan2_speedtest_latency",
+        "name": "WAN2 Speedtest Latency",
+        "topic": "network/speedtest/eth1",
         "value_template": "{{ value_json.latest.latency if value_json.latest else '' }}",
         "unit_of_measurement": "ms",
         "state_class": "measurement",
