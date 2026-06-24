@@ -70,6 +70,7 @@ class FirewallaMQTTClient:
             f"{prefix}/{TOPIC_WAN}/#",
             f"{prefix}/{TOPIC_SYSTEM_METRICS}",
             f"{prefix}/network/live_stats/wan/#",
+            f"{prefix}/network/usage/wan/#",
         ]
         for topic in topics:
             unsub = await mqtt.async_subscribe(self._hass, topic, self._on_message, qos=1)

@@ -28,6 +28,8 @@ import {
   AlarmService,
   InitService,
   FeatureService,
+  FWGroupApi,
+  FWGetMessage,
 } from 'node-firewalla';
 import fs from 'fs';
 import path from 'path';
@@ -383,6 +385,31 @@ async function collectUsage(fwGroup) {
     });
   } catch (e) {
     console.log('[Usage] Error fetching monthly data:', e.message);
+  }
+
+  // Per-WAN monthly usage via undocumented firmware endpoint
+  try {
+    const wanUsage = await FWGroupApi.sendMessageToBox(
+      fwGroup, new FWGetMessage('monthlyDataUsageOnWans')
+    );
+    if (wanUsage && typeof wanUsage === 'object') {
+      for (const [uuid, data] of Object.entries(wanUsage)) {
+        if (!data || (data.totalUpload == null && data.totalDownload == null)) continue;
+        const beginDate = data.monthlyBeginTs ? new Date(data.monthlyBeginTs * 1000) : null;
+        const safeName  = uuid.replace(/[^a-zA-Z0-9_]/g, '_');
+        await publish(`network/usage/wan/${safeName}`, {
+          wan:           uuid,
+          month:         beginDate ? beginDate.getMonth() + 1 : null,
+          year:          beginDate ? beginDate.getFullYear()  : null,
+          monthStart:    beginDate ? beginDate.toISOString()  : null,
+          uploadBytes:   data.totalUpload   || 0,
+          downloadBytes: data.totalDownload || 0,
+          timestamp:     new Date().toISOString(),
+        });
+      }
+    }
+  } catch (e) {
+    console.log('[Usage] Error fetching per-WAN monthly data:', e.message);
   }
 
   try {
