@@ -1,14 +1,13 @@
-"""MQTT client for Firewalla data."""
+"""MQTT client for Firewalla data — uses HA's built-in MQTT integration."""
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from homeassistant.core import HomeAssistant
-import paho.mqtt.client as mqtt
+from homeassistant.components import mqtt
+from homeassistant.core import HomeAssistant, callback
 
 from .const import (
     TOPIC_ALARMS,
@@ -24,93 +23,66 @@ from .const import (
     TOPIC_USAGE,
 )
 
+if TYPE_CHECKING:
+    from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+
 _LOGGER = logging.getLogger(__name__)
 
 
 class FirewallaMQTTClient:
-    """MQTT client that subscribes to Firewalla topics."""
+    """Subscribes to Firewalla MQTT topics via HA's built-in MQTT integration."""
 
     def __init__(
         self,
         hass: HomeAssistant,
-        broker: str,
-        port: int,
         topic_prefix: str,
-        username: str = "",
-        password: str = "",
         firewalla_ip: str = "",
     ) -> None:
         self._hass = hass
-        self._broker = broker
-        self._port = port
         self._prefix = topic_prefix
-        self._username = username
-        self._password = password
         self._firewalla_ip = firewalla_ip
-        self._client = mqtt.Client()
-        self._client.on_connect = self._on_connect
-        self._client.on_message = self._on_message
-        self._client.on_disconnect = self._on_disconnect
         self.received_messages: dict[str, Any] = {}
-        self._connect_event = asyncio.Event()
+        self._unsubscribe_callbacks: list = []
+        self._coordinator: DataUpdateCoordinator | None = None
+
+    def set_coordinator(self, coordinator: DataUpdateCoordinator) -> None:
+        self._coordinator = coordinator
 
     async def connect(self) -> None:
-        """Connect to MQTT broker."""
-        loop = asyncio.get_running_loop()
-        self._connect_event.clear()
-
-        if self._username:
-            self._client.username_pw_set(self._username, self._password)
-
-        self._client.connect(self._broker, self._port, 60)
-        self._client.loop_start()
-
-        # Wait for connection
-        try:
-            await asyncio.wait_for(self._connect_event.wait(), timeout=10.0)
-        except asyncio.TimeoutError:
-            self._client.loop_stop()
-            raise ConnectionError("MQTT connection timed out")
+        """Subscribe to all Firewalla MQTT topics."""
+        prefix = self._prefix
+        topics = [
+            f"{prefix}/{TOPIC_STATUS}",
+            f"{prefix}/{TOPIC_LIVE_STATS}",
+            f"{prefix}/{TOPIC_HOSTS_SUMMARY}",
+            f"{prefix}/{TOPIC_HOSTS}",
+            f"{prefix}/{TOPIC_HOST}/#",
+            f"{prefix}/{TOPIC_ALARMS_SUMMARY}",
+            f"{prefix}/{TOPIC_ALARMS}",
+            f"{prefix}/{TOPIC_USAGE}",
+            f"{prefix}/{TOPIC_SPEEDTEST}",
+            f"{prefix}/{TOPIC_BOX_INFO}",
+            f"{prefix}/{TOPIC_BOX_FEATURES}",
+        ]
+        for topic in topics:
+            unsub = await mqtt.async_subscribe(self._hass, topic, self._on_message, qos=1)
+            self._unsubscribe_callbacks.append(unsub)
+            _LOGGER.debug("Subscribed to %s", topic)
 
     async def disconnect(self) -> None:
-        """Disconnect from MQTT broker."""
-        self._client.loop_stop()
-        self._client.disconnect()
+        """Unsubscribe from all topics."""
+        for unsub in self._unsubscribe_callbacks:
+            unsub()
+        self._unsubscribe_callbacks.clear()
 
-    def _on_connect(self, client: mqtt.Client, userdata, flags, rc, properties=None):
-        """Handle MQTT connection."""
-        if rc == 0:
-            _LOGGER.info("Connected to MQTT broker at %s:%d", self._broker, self._port)
-            # Subscribe to all Firewalla topics
-            topics = [
-                f"{self._prefix}/{TOPIC_STATUS}",
-                f"{self._prefix}/{TOPIC_LIVE_STATS}",
-                f"{self._prefix}/{TOPIC_HOSTS_SUMMARY}",
-                f"{self._prefix}/{TOPIC_HOSTS}",
-                f"{self._prefix}/{TOPIC_HOST}/#",
-                f"{self._prefix}/{TOPIC_ALARMS_SUMMARY}",
-                f"{self._prefix}/{TOPIC_ALARMS}",
-                f"{self._prefix}/{TOPIC_USAGE}",
-                f"{self._prefix}/{TOPIC_SPEEDTEST}",
-                f"{self._prefix}/{TOPIC_BOX_INFO}",
-                f"{self._prefix}/{TOPIC_BOX_FEATURES}",
-            ]
-            for topic in topics:
-                client.subscribe(topic, qos=1)
-                _LOGGER.debug("Subscribed to %s", topic)
-            self._connect_event.set()
-        else:
-            _LOGGER.error("MQTT connection failed with code %d", rc)
-
-    def _on_message(self, client: mqtt.Client, userdata, msg: mqtt.MQTTMessage):
-        """Handle incoming MQTT message."""
+    @callback
+    def _on_message(self, msg: mqtt.ReceiveMessage) -> None:
+        """Handle an incoming MQTT message and push data to the coordinator."""
         try:
-            payload = json.loads(msg.payload.decode())
+            payload = json.loads(msg.payload)
             self.received_messages[msg.topic] = payload
-            _LOGGER.debug("Received %s: %s", msg.topic, msg.payload.decode()[:200])
-        except json.JSONDecodeError:
-            _LOGGER.warning("Invalid JSON on %s: %s", msg.topic, msg.payload)
-
-    def _on_disconnect(self, client: mqtt.Client, userdata, rc, properties=None):
-        """Handle MQTT disconnection."""
-        _LOGGER.warning("Disconnected from MQTT broker (rc=%d)", rc)
+            _LOGGER.debug("Received %s", msg.topic)
+            if self._coordinator is not None:
+                self._coordinator.async_set_updated_data(dict(self.received_messages))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            _LOGGER.warning("Invalid JSON on topic %s", msg.topic)

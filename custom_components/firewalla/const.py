@@ -7,16 +7,11 @@ NAME: Final = "Firewalla MQTT Bridge"
 MANUFACTURER: Final = "Firewalla"
 
 # Config entry keys
-CONF_MQTT_BROKER: Final = "mqtt_broker"
-CONF_MQTT_PORT: Final = "mqtt_port"
 CONF_MQTT_PREFIX: Final = "mqtt_prefix"
-CONF_MQTT_USERNAME: Final = "mqtt_username"
-CONF_MQTT_PASSWORD: Final = "mqtt_password"
 CONF_FIREWALLA_IP: Final = "firewalla_ip"
 
 # Defaults
 DEFAULT_MQTT_PREFIX: Final = "firewalla"
-DEFAULT_MQTT_PORT: Final = 1833
 
 # MQTT topic suffixes
 TOPIC_STATUS: Final = "network/status"
@@ -38,7 +33,6 @@ SENSOR_ENTITIES: Final = [
         "name": "Public IP",
         "topic": TOPIC_STATUS,
         "value_template": "{{ value_json.publicIp }}",
-        "device_class": "text",
         "entity_category": "diagnostic",
     },
     {
@@ -53,7 +47,7 @@ SENSOR_ENTITIES: Final = [
         "name": "Download Speed",
         "topic": TOPIC_LIVE_STATS,
         "value_template": "{{ value_json.downloadMbps }}",
-        "unit_of_measurement": "Mbps",
+        "unit_of_measurement": "Mbit/s",
         "device_class": "data_rate",
         "state_class": "measurement",
     },
@@ -62,7 +56,7 @@ SENSOR_ENTITIES: Final = [
         "name": "Upload Speed",
         "topic": TOPIC_LIVE_STATS,
         "value_template": "{{ value_json.uploadMbps }}",
-        "unit_of_measurement": "Mbps",
+        "unit_of_measurement": "Mbit/s",
         "device_class": "data_rate",
         "state_class": "measurement",
     },
@@ -134,7 +128,7 @@ SENSOR_ENTITIES: Final = [
         "name": "Download Usage",
         "topic": TOPIC_USAGE,
         "value_template": "{{ value_json.downloadBytes }}",
-        "unit_of_measurement": "Bytes",
+        "unit_of_measurement": "B",
         "device_class": "data_size",
         "state_class": "total_increasing",
     },
@@ -143,7 +137,7 @@ SENSOR_ENTITIES: Final = [
         "name": "Upload Usage",
         "topic": TOPIC_USAGE,
         "value_template": "{{ value_json.uploadBytes }}",
-        "unit_of_measurement": "Bytes",
+        "unit_of_measurement": "B",
         "device_class": "data_size",
         "state_class": "total_increasing",
     },
@@ -152,7 +146,7 @@ SENSOR_ENTITIES: Final = [
         "name": "Speedtest Download",
         "topic": TOPIC_SPEEDTEST,
         "value_template": "{{ value_json.latest.downloadMbps if value_json.latest else '' }}",
-        "unit_of_measurement": "Mbps",
+        "unit_of_measurement": "Mbit/s",
         "device_class": "data_rate",
         "state_class": "measurement",
     },
@@ -161,7 +155,7 @@ SENSOR_ENTITIES: Final = [
         "name": "Speedtest Upload",
         "topic": TOPIC_SPEEDTEST,
         "value_template": "{{ value_json.latest.uploadMbps if value_json.latest else '' }}",
-        "unit_of_measurement": "Mbps",
+        "unit_of_measurement": "Mbit/s",
         "device_class": "data_rate",
         "state_class": "measurement",
     },
@@ -171,7 +165,6 @@ SENSOR_ENTITIES: Final = [
         "topic": TOPIC_SPEEDTEST,
         "value_template": "{{ value_json.latest.latency if value_json.latest else '' }}",
         "unit_of_measurement": "ms",
-        "device_class": "latency",
         "state_class": "measurement",
     },
 ]
@@ -191,30 +184,5 @@ BINARY_SENSOR_ENTITIES: Final = [
         "topic": TOPIC_BOX_INFO,
         "value_template": "{{ value_json.bootingComplete }}",
         "device_class": "running",
-    },
-]
-
-# Text entities for per-device info
-TEXT_ENTITIES: Final = [
-    {
-        "key": "device_name",
-        "name": "Device Name",
-        "topic_template": "network/host/{{ mac }}",
-        "value_template": "{{ value_json.name }}",
-        "entity_category": "diagnostic",
-    },
-]
-
-# Number entities
-NUMBER_ENTITIES: Final = [
-    {
-        "key": "collect_interval",
-        "name": "Collect Interval",
-        "topic": "firewalla/config/collect_interval",
-        "min": 30,
-        "max": 3600,
-        "step": 30,
-        "unit_of_measurement": "s",
-        "entity_category": "config",
     },
 ]

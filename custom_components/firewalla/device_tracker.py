@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.components.device_tracker.config_entry import TrackerEntity
+from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -32,7 +33,6 @@ async def async_setup_entry(
 
     entities: list[TrackerEntity] = []
 
-    # Per-device presence trackers
     hosts_data = client.received_messages.get(f"{prefix}/network/hosts", {})
     online_devices = hosts_data.get("online", [])
     for device in online_devices:
@@ -67,7 +67,6 @@ class FirewallaDeviceTracker(CoordinatorEntity, TrackerEntity):
         client=None,
         prefix: str = "firewalla",
     ) -> None:
-        """Initialize the device tracker."""
         super().__init__(coordinator)
         self._device_name = device_name
         self._mac = mac
@@ -83,13 +82,11 @@ class FirewallaDeviceTracker(CoordinatorEntity, TrackerEntity):
         )
 
     @property
-    def source_type(self) -> str:
-        """Return the source type."""
-        return "router"
+    def source_type(self) -> SourceType:
+        return SourceType.ROUTER
 
     @property
-    def is_on(self) -> bool | None:
-        """Return the state."""
+    def is_connected(self) -> bool | None:
         topic = f"{self._prefix}/{TOPIC_HOST}/{self._mac_underscore}"
         payload = self.coordinator.data.get(topic)
         if payload:
@@ -98,7 +95,6 @@ class FirewallaDeviceTracker(CoordinatorEntity, TrackerEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        """Return the state attributes."""
         topic = f"{self._prefix}/{TOPIC_HOST}/{self._mac_underscore}"
         payload = self.coordinator.data.get(topic)
         if payload:
@@ -107,6 +103,4 @@ class FirewallaDeviceTracker(CoordinatorEntity, TrackerEntity):
                 "mac_address": self._mac,
                 "last_seen": payload.get("timestamp"),
             }
-        return {
-            "mac_address": self._mac,
-        }
+        return {"mac_address": self._mac}
