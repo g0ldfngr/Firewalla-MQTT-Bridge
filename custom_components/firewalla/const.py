@@ -26,6 +26,7 @@ TOPIC_SPEEDTEST: Final = "network/speedtest"
 TOPIC_BOX_INFO: Final = "box_info"
 TOPIC_BOX_FEATURES: Final = "box/features"
 TOPIC_WAN: Final = "network/wan"
+TOPIC_SYSTEM_METRICS: Final = "system/metrics"
 
 # Sensor entity descriptions
 SENSOR_ENTITIES: Final = [
@@ -59,20 +60,6 @@ SENSOR_ENTITIES: Final = [
         "value_template": "{{ value_json.uploadMbps }}",
         "unit_of_measurement": "Mbit/s",
         "device_class": "data_rate",
-        "state_class": "measurement",
-    },
-    {
-        "key": "active_connections",
-        "name": "Active Connections",
-        "topic": TOPIC_LIVE_STATS,
-        "value_template": "{{ value_json.activeConnections }}",
-        "state_class": "measurement",
-    },
-    {
-        "key": "total_connections",
-        "name": "Total Connections",
-        "topic": TOPIC_LIVE_STATS,
-        "value_template": "{{ value_json.totalConnections }}",
         "state_class": "measurement",
     },
     {
@@ -258,6 +245,24 @@ SENSOR_ENTITIES: Final = [
         "value_template": "{{ value_json.latest.latency if value_json.latest else '' }}",
         "unit_of_measurement": "ms",
         "state_class": "measurement",
+    },
+    # System health
+    {
+        "key": "mem_usage_pct",
+        "name": "Memory Usage",
+        "topic": TOPIC_SYSTEM_METRICS,
+        "value_template": "{{ value_json.memUsagePct }}",
+        "unit_of_measurement": "%",
+        "state_class": "measurement",
+        "entity_category": "diagnostic",
+    },
+    {
+        "key": "cpu_load_1",
+        "name": "CPU Load (1m)",
+        "topic": TOPIC_SYSTEM_METRICS,
+        "value_template": "{{ value_json.load1 }}",
+        "state_class": "measurement",
+        "entity_category": "diagnostic",
     },
 ]
 

@@ -98,17 +98,28 @@ async function publish(topic, payload) {
 
 // ── Firewalla Data Collectors ──────────────────────────────────────────────
 
+// last60 is [[epoch_sec, bytes], ...] in 60-second buckets. Returns Mbps from
+// the most recent complete bucket.
+function last60ToMbps(arr) {
+  if (!Array.isArray(arr) || arr.length === 0) return 0;
+  const sorted = [...arr].sort((a, b) => b[0] - a[0]);
+  const bytes  = sorted[0][1] ?? 0;
+  return parseFloat((bytes / 60 * 8 / 1_000_000).toFixed(3));
+}
+
 async function collectBoxInfo(fwGroup) {
   const init      = new InitService(fwGroup);
   const initState = await init.init();
 
-  // liveStats returns code 500 on some models — always publish (zeroed on failure)
-  let liveStats = null;
-  try {
-    liveStats = await init.liveStats();
-  } catch (e) {
-    console.log('[LiveStats] Error:', e.message);
-  }
+  // liveStats fails on Firewalla Gold (box returns code 500 internally).
+  // Derive throughput from initState.last60 instead.
+  const last60     = initState.last60     || {};
+  const sysMetrics = initState.sysMetrics || {};
+  const netMetrics = initState.networkMetrics || {};
+  const nicStates  = initState.nicStates  || {};
+
+  const downloadMbps = last60ToMbps(last60.download);
+  const uploadMbps   = last60ToMbps(last60.upload);
 
   await publish('box_info', {
     model:           initState.model,
@@ -132,13 +143,43 @@ async function collectBoxInfo(fwGroup) {
     timestamp:      new Date().toISOString(),
   });
 
-  // Always publish live_stats with current timestamp so it doesn't go stale
+  // Derived from last60 — reflects the most recent 60-second window
   await publish('network/live_stats', {
-    downloadMbps:      liveStats?.downloadMbps      ?? 0,
-    uploadMbps:        liveStats?.uploadMbps        ?? 0,
-    activeConnections: liveStats?.activeConnections  ?? 0,
-    totalConnections:  liveStats?.totalConnections   ?? 0,
+    downloadMbps,
+    uploadMbps,
+    // Active/total connections not available on Firewalla Gold via this API
+    activeConnections: 0,
+    totalConnections:  0,
     timestamp:         new Date().toISOString(),
+  });
+
+  // System health metrics
+  await publish('system/metrics', {
+    memUsagePct:  parseFloat(((sysMetrics.memUsage ?? 0) * 100).toFixed(1)),
+    totalMemMB:   Math.round(sysMetrics.totalMem ?? 0),
+    load1:        sysMetrics.load1  ?? null,
+    load5:        sysMetrics.load5  ?? null,
+    load15:       sysMetrics.load15 ?? null,
+    timestamp:    new Date().toISOString(),
+  });
+
+  // Per-interface network metrics (rx/tx byte-rate percentiles)
+  const ifaceStats = {};
+  for (const [iface, stats] of Object.entries(netMetrics)) {
+    if (stats?.rx || stats?.tx) {
+      ifaceStats[iface] = {
+        rxMedianBps:  stats.rx ? parseInt(stats.rx.median ?? 0) : 0,
+        rxMaxBps:     stats.rx ? parseInt(stats.rx.max    ?? 0) : 0,
+        txMedianBps:  stats.tx ? parseInt(stats.tx.median ?? 0) : 0,
+        txMaxBps:     stats.tx ? parseInt(stats.tx.max    ?? 0) : 0,
+        carrier:      nicStates[iface]?.carrier === '1',
+        linkSpeed:    nicStates[iface]?.speed ?? null,
+      };
+    }
+  }
+  await publish('network/interfaces', {
+    interfaces: ifaceStats,
+    timestamp:  new Date().toISOString(),
   });
 
   const features = initState.runtimeFeatures || {};
