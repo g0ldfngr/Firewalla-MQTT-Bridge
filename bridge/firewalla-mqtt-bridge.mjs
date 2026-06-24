@@ -98,12 +98,11 @@ async function publish(topic, payload) {
 async function collectBoxInfo(fwGroup) {
   const init      = new InitService(fwGroup);
   const initState = await init.init();
-  let liveStats   = { downloadMbps: 0, uploadMbps: 0, activeConnections: 0, totalConnections: 0 };
+  // liveStats returns code 500 on some Firewalla models — skip silently
+  let liveStats = null;
   try {
     liveStats = await init.liveStats();
-  } catch (e) {
-    console.log('[LiveStats] Error:', e.message);
-  }
+  } catch (_) {}
 
   await publish('box_info', {
     model:           initState.model,
@@ -127,13 +126,15 @@ async function collectBoxInfo(fwGroup) {
     timestamp:      new Date().toISOString(),
   });
 
-  await publish('network/live_stats', {
-    downloadMbps:       liveStats?.downloadMbps || 0,
-    uploadMbps:         liveStats?.uploadMbps || 0,
-    activeConnections:  liveStats?.activeConnections || 0,
-    totalConnections:   liveStats?.totalConnections || 0,
-    timestamp:          new Date().toISOString(),
-  });
+  if (liveStats) {
+    await publish('network/live_stats', {
+      downloadMbps:      liveStats.downloadMbps      || 0,
+      uploadMbps:        liveStats.uploadMbps        || 0,
+      activeConnections: liveStats.activeConnections  || 0,
+      totalConnections:  liveStats.totalConnections   || 0,
+      timestamp:         new Date().toISOString(),
+    });
+  }
 
   const features = initState.runtimeFeatures || {};
   await publish('box/features', {
@@ -264,20 +265,23 @@ async function collectUsage(fwGroup) {
 async function collectSpeedtest(fwGroup) {
   const ns = new NetworkService(fwGroup);
   try {
-    const results = await ns.getSpeedtestResults();
+    // API returns { results: [...] }, not a bare array
+    const raw     = await ns.getSpeedtestResults();
+    const results = Array.isArray(raw) ? raw : (raw?.results || []);
+
+    const toEntry = r => ({
+      downloadMbps: r.result?.download  ?? 0,
+      uploadMbps:   r.result?.upload    ?? 0,
+      latency:      r.result?.latency   ?? 0,
+      jitter:       r.result?.jitter    ?? 0,
+      isp:          r.client?.isp       ?? null,
+      server:       r.server?.location  ?? null,
+      timestamp:    new Date(r.timestamp * 1000).toISOString(),
+    });
+
     await publish('network/speedtest', {
-      latest: results?.[0] ? {
-        downloadMbps: results[0].downloadMbps,
-        uploadMbps:   results[0].uploadMbps,
-        latency:      results[0].latency,
-        timestamp:    results[0].timestamp,
-      } : null,
-      history:   (results?.slice(0, 10) || []).map(r => ({
-        downloadMbps: r.downloadMbps,
-        uploadMbps:   r.uploadMbps,
-        latency:      r.latency,
-        timestamp:    r.timestamp,
-      })),
+      latest:    results[0] ? toEntry(results[0]) : null,
+      history:   results.slice(0, 10).map(toEntry),
       timestamp: new Date().toISOString(),
     });
   } catch (e) {
