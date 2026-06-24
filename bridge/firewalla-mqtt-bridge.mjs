@@ -47,6 +47,9 @@ const KEYS_DIR         = process.env.FIREWALLA_KEYS_DIR || '/app/credentials';
 // Device is considered online if last seen within 30 minutes
 const ONLINE_THRESHOLD_MS = 30 * 60 * 1000;
 
+// Per-WAN accumulated counter snapshots for delta-based live throughput calculation
+const prevWanUsage = {};
+
 // ── Load Credentials ───────────────────────────────────────────────────────
 
 function loadCredentials() {
@@ -154,25 +157,6 @@ async function collectBoxInfo(fwGroup) {
     totalConnections:  0,
     timestamp:         new Date().toISOString(),
   });
-
-  // Per-WAN live stats using networkMetrics rx/tx median (bytes/sec → Mbps).
-  // publicIps is keyed by intf name (eth0/eth1), so publicIpsMap[iface] gives
-  // the public IP and also serves as the WAN filter (skips internal interfaces).
-  const publicIpsMap = initState.publicIps || {};
-  for (const [iface, stats] of Object.entries(netMetrics)) {
-    if (!publicIpsMap[iface]) continue;
-    const dlMbps = stats?.rx?.median
-      ? parseFloat((parseInt(stats.rx.median) * 8 / 1_000_000).toFixed(3)) : 0;
-    const ulMbps = stats?.tx?.median
-      ? parseFloat((parseInt(stats.tx.median) * 8 / 1_000_000).toFixed(3)) : 0;
-    const safeName = iface.replace(/[^a-zA-Z0-9_]/g, '_');
-    await publish(`network/live_stats/wan/${safeName}`, {
-      downloadMbps: dlMbps,
-      uploadMbps:   ulMbps,
-      publicIp:     publicIpsMap[iface],
-      timestamp:    new Date().toISOString(),
-    });
-  }
 
   // System health metrics
   await publish('system/metrics', {
@@ -389,7 +373,9 @@ async function collectUsage(fwGroup, initState = {}) {
     console.log('[Usage] Error fetching monthly data:', e.message);
   }
 
-  // Per-WAN monthly usage via firmware endpoint (returns data keyed by WAN UUID)
+  // Per-WAN monthly usage + live throughput via firmware endpoint (keyed by WAN UUID).
+  // Live throughput is computed as the delta of accumulated monthly counters between
+  // collection cycles — the device updates these counters every ~60 seconds.
   try {
     // Build UUID → intf name map from networkProfiles
     const networkProfiles = initState.networkProfiles || {};
@@ -402,12 +388,14 @@ async function collectUsage(fwGroup, initState = {}) {
     const wanUsage = await FWGroupApi.sendMessageToBox(
       fwGroup, new FWGetMessage('monthlyDataUsageOnWans')
     );
+    const now = Date.now();
     if (wanUsage && typeof wanUsage === 'object') {
       for (const [uuid, data] of Object.entries(wanUsage)) {
         if (!data || (data.totalUpload == null && data.totalDownload == null)) continue;
         const intf      = uuidToIntf[uuid] || uuid;
         const safeName  = intf.replace(/[^a-zA-Z0-9_]/g, '_');
         const beginDate = data.monthlyBeginTs ? new Date(data.monthlyBeginTs * 1000) : null;
+
         await publish(`network/usage/wan/${safeName}`, {
           wan:           intf,
           wanUUID:       uuid,
@@ -418,6 +406,23 @@ async function collectUsage(fwGroup, initState = {}) {
           downloadBytes: data.totalDownload || 0,
           timestamp:     new Date().toISOString(),
         });
+
+        // Compute per-WAN live throughput from the delta of accumulated counters.
+        // Skips the first cycle (no previous snapshot) and month rollovers (negative delta).
+        const prev = prevWanUsage[uuid];
+        if (prev && (now - prev.ts) >= 1000) {
+          const deltaMs  = now - prev.ts;
+          const dlDelta  = (data.totalDownload || 0) >= prev.dl ? (data.totalDownload || 0) - prev.dl : 0;
+          const ulDelta  = (data.totalUpload   || 0) >= prev.ul ? (data.totalUpload   || 0) - prev.ul : 0;
+          const publicIp = (initState.publicIps || {})[intf] || null;
+          await publish(`network/live_stats/wan/${safeName}`, {
+            downloadMbps: parseFloat((dlDelta / (deltaMs / 1000) * 8 / 1e6).toFixed(3)),
+            uploadMbps:   parseFloat((ulDelta / (deltaMs / 1000) * 8 / 1e6).toFixed(3)),
+            publicIp,
+            timestamp:    new Date().toISOString(),
+          });
+        }
+        prevWanUsage[uuid] = { dl: data.totalDownload || 0, ul: data.totalUpload || 0, ts: now };
       }
     }
   } catch (e) {
