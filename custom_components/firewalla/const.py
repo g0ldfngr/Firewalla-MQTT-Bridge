@@ -27,6 +27,8 @@ TOPIC_BOX_INFO: Final = "box_info"
 TOPIC_BOX_FEATURES: Final = "box/features"
 TOPIC_WAN: Final = "network/wan"
 TOPIC_SYSTEM_METRICS: Final = "system/metrics"
+TOPIC_NETWORK_MONITOR: Final = "network/monitor"
+TOPIC_DATA_PLAN: Final = "network/data_plan"
 
 # Sensor entity descriptions
 SENSOR_ENTITIES: Final = [
@@ -266,6 +268,100 @@ SENSOR_ENTITIES: Final = [
         "state_class": "measurement",
         "entity_category": "diagnostic",
     },
+    {
+        "key": "cpu_load_5",
+        "name": "CPU Load (5m)",
+        "topic": TOPIC_SYSTEM_METRICS,
+        "value_template": "{{ value_json.load5 }}",
+        "state_class": "measurement",
+        "entity_category": "diagnostic",
+    },
+    {
+        "key": "cpu_load_15",
+        "name": "CPU Load (15m)",
+        "topic": TOPIC_SYSTEM_METRICS,
+        "value_template": "{{ value_json.load15 }}",
+        "state_class": "measurement",
+        "entity_category": "diagnostic",
+    },
+    # WAN1 (eth0) additional detail
+    {
+        "key": "wan1_gateway",
+        "name": "WAN1 Gateway",
+        "topic": "network/wan/eth0",
+        "value_template": "{{ value_json.gateway }}",
+        "entity_category": "diagnostic",
+    },
+    {
+        "key": "wan1_conn_type",
+        "name": "WAN1 Connection Type",
+        "topic": "network/wan/eth0",
+        "value_template": "{{ value_json.connType }}",
+        "entity_category": "diagnostic",
+    },
+    {
+        "key": "wan1_speedtest_jitter",
+        "name": "WAN1 Speedtest Jitter",
+        "topic": "network/speedtest/eth0",
+        "value_template": "{{ value_json.latest.jitter if value_json.latest else '' }}",
+        "unit_of_measurement": "ms",
+        "state_class": "measurement",
+    },
+    {
+        "key": "wan1_speedtest_packet_loss",
+        "name": "WAN1 Speedtest Packet Loss",
+        "topic": "network/speedtest/eth0",
+        "value_template": "{{ value_json.latest.packetLoss if value_json.latest else '' }}",
+        "unit_of_measurement": "%",
+        "state_class": "measurement",
+    },
+    # WAN2 (eth1) additional detail
+    {
+        "key": "wan2_gateway",
+        "name": "WAN2 Gateway",
+        "topic": "network/wan/eth1",
+        "value_template": "{{ value_json.gateway }}",
+        "entity_category": "diagnostic",
+    },
+    {
+        "key": "wan2_conn_type",
+        "name": "WAN2 Connection Type",
+        "topic": "network/wan/eth1",
+        "value_template": "{{ value_json.connType }}",
+        "entity_category": "diagnostic",
+    },
+    {
+        "key": "wan2_speedtest_jitter",
+        "name": "WAN2 Speedtest Jitter",
+        "topic": "network/speedtest/eth1",
+        "value_template": "{{ value_json.latest.jitter if value_json.latest else '' }}",
+        "unit_of_measurement": "ms",
+        "state_class": "measurement",
+    },
+    {
+        "key": "wan2_speedtest_packet_loss",
+        "name": "WAN2 Speedtest Packet Loss",
+        "topic": "network/speedtest/eth1",
+        "value_template": "{{ value_json.latest.packetLoss if value_json.latest else '' }}",
+        "unit_of_measurement": "%",
+        "state_class": "measurement",
+    },
+    # Data plan
+    {
+        "key": "data_plan_total_gb",
+        "name": "Data Plan Total",
+        "topic": TOPIC_DATA_PLAN,
+        "value_template": "{{ value_json.totalGB }}",
+        "unit_of_measurement": "GB",
+        "entity_category": "diagnostic",
+    },
+    {
+        "key": "data_plan_reset_day",
+        "name": "Data Plan Reset Day",
+        "topic": TOPIC_DATA_PLAN,
+        "value_template": "{{ value_json.resetDay }}",
+        "entity_category": "diagnostic",
+    },
 ]
 
 # Binary sensor entities
@@ -283,5 +379,40 @@ BINARY_SENSOR_ENTITIES: Final = [
         "topic": TOPIC_BOX_INFO,
         "value_template": "{{ value_json.bootingComplete }}",
         "device_class": "running",
+    },
+    {
+        "key": "wan1_active",
+        "name": "WAN1 Active",
+        "topic": "network/wan/eth0",
+        "value_template": "{{ value_json.active }}",
+        "device_class": "connectivity",
+    },
+    {
+        "key": "wan1_ready",
+        "name": "WAN1 Ready",
+        "topic": "network/wan/eth0",
+        "value_template": "{{ value_json.ready }}",
+        "device_class": "connectivity",
+    },
+    {
+        "key": "wan2_active",
+        "name": "WAN2 Active",
+        "topic": "network/wan/eth1",
+        "value_template": "{{ value_json.active }}",
+        "device_class": "connectivity",
+    },
+    {
+        "key": "wan2_ready",
+        "name": "WAN2 Ready",
+        "topic": "network/wan/eth1",
+        "value_template": "{{ value_json.ready }}",
+        "device_class": "connectivity",
+    },
+    {
+        "key": "data_plan_enabled",
+        "name": "Data Plan Enabled",
+        "topic": TOPIC_DATA_PLAN,
+        "value_template": "{{ value_json.enabled }}",
+        "entity_category": "diagnostic",
     },
 ]

@@ -218,10 +218,11 @@ async function collectWAN(initState) {
   const wans = [];
   for (const [uuid, publicIp] of Object.entries(publicIps)) {
     const profile = profileMap[uuid] || {};
+    const intf    = profile.intf || uuid;
     const wan = {
       uuid,
-      name:       profile.name       || profile.intf  || uuid,
-      intf:       profile.intf       || uuid,
+      name:       profile.name       || intf,
+      intf,
       publicIp,
       connType:   profile.conn_type  || 'unknown',
       active:     profile.active     ?? true,
@@ -232,7 +233,8 @@ async function collectWAN(initState) {
     };
     wans.push(wan);
 
-    const safeName = uuid.replace(/[^a-zA-Z0-9]/g, '_');
+    // Use intf name (e.g. eth0/eth1) so HA sensors can address by stable name
+    const safeName = intf.replace(/[^a-zA-Z0-9_]/g, '_');
     await publish(`network/wan/${safeName}`, wan);
   }
 
@@ -414,10 +416,13 @@ async function collectUsage(fwGroup, initState = {}) {
           const deltaMs  = now - prev.ts;
           const dlDelta  = (data.totalDownload || 0) >= prev.dl ? (data.totalDownload || 0) - prev.dl : 0;
           const ulDelta  = (data.totalUpload   || 0) >= prev.ul ? (data.totalUpload   || 0) - prev.ul : 0;
-          const publicIp = (initState.publicIps || {})[intf] || null;
+          const dlMbps   = parseFloat((dlDelta / (deltaMs / 1000) * 8 / 1e6).toFixed(3));
+          const ulMbps   = parseFloat((ulDelta / (deltaMs / 1000) * 8 / 1e6).toFixed(3));
+          console.log(`[WAN ${intf}] dl=${dlMbps}Mbps ul=${ulMbps}Mbps (delta ${Math.round(deltaMs/1000)}s dl=${dlDelta}B ul=${ulDelta}B)`);
+          const publicIp = (initState.publicIps || {})[uuid] || null;
           await publish(`network/live_stats/wan/${safeName}`, {
-            downloadMbps: parseFloat((dlDelta / (deltaMs / 1000) * 8 / 1e6).toFixed(3)),
-            uploadMbps:   parseFloat((ulDelta / (deltaMs / 1000) * 8 / 1e6).toFixed(3)),
+            downloadMbps: dlMbps,
+            uploadMbps:   ulMbps,
             publicIp,
             timestamp:    new Date().toISOString(),
           });
@@ -444,31 +449,44 @@ async function collectSpeedtest(fwGroup, initState) {
     const results = Array.isArray(raw) ? raw : (raw?.results || []);
 
     const publicIps = initState?.publicIps || {};
-    // Build reverse map: publicIp -> WAN uuid
+    // publicIp -> WAN uuid
     const ipToWan = {};
     for (const [uuid, ip] of Object.entries(publicIps)) {
       ipToWan[ip] = uuid;
     }
 
-    const toEntry = r => ({
-      downloadMbps: r.result?.download  ?? 0,
-      uploadMbps:   r.result?.upload    ?? 0,
-      latency:      r.result?.latency   ?? 0,
-      jitter:       r.result?.jitter    ?? 0,
-      packetLoss:   r.result?.ploss     ?? 0,
-      isp:          r.client?.isp       ?? null,
-      publicIp:     r.client?.publicIp  ?? null,
-      wanUUID:      r.client?.publicIp  ? (ipToWan[r.client.publicIp] || null) : null,
-      server:       r.server?.location  ?? null,
-      timestamp:    new Date(r.timestamp * 1000).toISOString(),
-    });
+    // WAN uuid -> intf name (eth0/eth1)
+    const networkProfiles = initState?.networkProfiles || {};
+    const profiles = Array.isArray(networkProfiles) ? networkProfiles : Object.values(networkProfiles);
+    const uuidToIntf = {};
+    for (const p of profiles) {
+      if (p.uuid && p.intf) uuidToIntf[p.uuid] = p.intf;
+    }
+
+    const toEntry = r => {
+      const wanUUID = r.client?.publicIp ? (ipToWan[r.client.publicIp] || null) : null;
+      const wanIntf = wanUUID ? (uuidToIntf[wanUUID] || null) : null;
+      return {
+        downloadMbps: r.result?.download  ?? 0,
+        uploadMbps:   r.result?.upload    ?? 0,
+        latency:      r.result?.latency   ?? 0,
+        jitter:       r.result?.jitter    ?? 0,
+        packetLoss:   r.result?.ploss     ?? 0,
+        isp:          r.client?.isp       ?? null,
+        publicIp:     r.client?.publicIp  ?? null,
+        wanUUID,
+        wanIntf,
+        server:       r.server?.location  ?? null,
+        timestamp:    new Date(r.timestamp * 1000).toISOString(),
+      };
+    };
 
     const allEntries = results.slice(0, 20).map(toEntry);
 
-    // Group by WAN (by publicIp) to get per-WAN latest
+    // Group by intf name for stable per-WAN topics
     const byWan = {};
     for (const entry of allEntries) {
-      const key = entry.wanUUID || entry.publicIp || 'default';
+      const key = entry.wanIntf || entry.wanUUID || entry.publicIp || 'default';
       if (!byWan[key]) byWan[key] = [];
       byWan[key].push(entry);
     }
@@ -480,9 +498,9 @@ async function collectSpeedtest(fwGroup, initState) {
       timestamp: new Date().toISOString(),
     });
 
-    // Publish per-WAN speedtest topics
+    // Publish per-WAN speedtest topics using intf name (eth0/eth1)
     for (const [wanKey, entries] of Object.entries(byWan)) {
-      const safeName = wanKey.replace(/[^a-zA-Z0-9]/g, '_');
+      const safeName = wanKey.replace(/[^a-zA-Z0-9_]/g, '_');
       await publish(`network/speedtest/${safeName}`, {
         latest:    entries[0] || null,
         history:   entries,
@@ -491,6 +509,58 @@ async function collectSpeedtest(fwGroup, initState) {
     }
   } catch (e) {
     console.log('[Speedtest] Error:', e.message);
+  }
+}
+
+async function collectNetworkMonitor(fwGroup) {
+  const ns = new NetworkService(fwGroup);
+  try {
+    const data = await ns.getNetworkMonitorData();
+    if (!data || !Array.isArray(data) || data.length === 0) return;
+
+    // data = [{metricName: {epochSec: {stat: {median, min, max, mean, lossrate}}}}]
+    const latest = {};
+    for (const item of data) {
+      for (const [metric, timestamps] of Object.entries(item)) {
+        if (!timestamps || typeof timestamps !== 'object') continue;
+        const tsKeys = Object.keys(timestamps).map(Number).filter(Boolean).sort((a, b) => b - a);
+        if (tsKeys.length === 0) continue;
+        const stat = timestamps[tsKeys[0]]?.stat;
+        if (stat) {
+          latest[metric] = {
+            latencyMs:  stat.median   ?? null,
+            minMs:      stat.min      ?? null,
+            maxMs:      stat.max      ?? null,
+            lossrate:   stat.lossrate ?? null,
+            timestamp:  new Date(tsKeys[0] * 1000).toISOString(),
+          };
+        }
+      }
+    }
+
+    await publish('network/monitor', { metrics: latest, timestamp: new Date().toISOString() });
+
+    for (const [metric, stats] of Object.entries(latest)) {
+      const safeName = metric.replace(/[^a-zA-Z0-9_]/g, '_');
+      await publish(`network/monitor/${safeName}`, { metric, ...stats });
+    }
+  } catch (e) {
+    console.log('[NetworkMonitor] Error:', e.message);
+  }
+}
+
+async function collectDataPlan(fwGroup) {
+  const ns = new NetworkService(fwGroup);
+  try {
+    const result = await ns.getDataPlan();
+    await publish('network/data_plan', {
+      enabled:   result?.enable       ?? false,
+      totalGB:   result?.dataPlan?.total ?? null,
+      resetDay:  result?.dataPlan?.date  ?? null,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.log('[DataPlan] Error:', e.message);
   }
 }
 
@@ -528,6 +598,12 @@ async function runCollection() {
 
   console.log('[Bridge] Collecting speedtest results...');
   await collectSpeedtest(fwGroup, initState);
+
+  console.log('[Bridge] Collecting network monitor data...');
+  await collectNetworkMonitor(fwGroup);
+
+  console.log('[Bridge] Collecting data plan...');
+  await collectDataPlan(fwGroup);
 
   console.log('[Bridge] Collection complete.');
 }
