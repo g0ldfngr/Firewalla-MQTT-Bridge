@@ -205,19 +205,22 @@ async function collectWAN(initState) {
   const networkProfiles = initState.networkProfiles;
   const virtWanGroups  = initState.virtWanGroups  || [];
 
-  // networkProfiles can be an object keyed by UUID or an array
-  const profileMap = {};
-  if (Array.isArray(networkProfiles)) {
-    for (const p of networkProfiles) {
-      profileMap[p.uuid] = p;
-    }
-  } else if (networkProfiles && typeof networkProfiles === 'object') {
-    Object.assign(profileMap, networkProfiles);
+  // Build lookup by both UUID and intf name — publicIps is keyed by intf (eth0/eth1)
+  const profileByUuid = {};
+  const profileByIntf = {};
+  const profileList = Array.isArray(networkProfiles)
+    ? networkProfiles
+    : Object.values(networkProfiles || {});
+  for (const p of profileList) {
+    if (!p) continue;
+    if (p.uuid) profileByUuid[p.uuid] = p;
+    if (p.intf) profileByIntf[p.intf] = p;
   }
 
   const wans = [];
   for (const [uuid, publicIp] of Object.entries(publicIps)) {
-    const profile = profileMap[uuid] || {};
+    // uuid is actually the intf name when publicIps is keyed by intf
+    const profile = profileByUuid[uuid] || profileByIntf[uuid] || {};
     const intf    = profile.intf || uuid;
     const wan = {
       uuid,
