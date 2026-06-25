@@ -200,6 +200,17 @@ async function collectBoxInfo(fwGroup) {
   return initState;
 }
 
+function deriveWanConnType(profile) {
+  const ip = profile.ipv4 || '';
+  // Private IP space (RFC1918) → DHCP behind modem/router
+  if (/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/.test(ip)) return 'DHCP';
+  // Public IP with no DHCP-provided origDns → static assignment
+  if (ip && (profile.origDns || []).length === 0) return 'Static IP';
+  // Public IP but DHCP provided DNS → DHCP with public IP
+  if (ip) return 'DHCP';
+  return 'Unknown';
+}
+
 async function collectWAN(initState) {
   const publicIps      = initState.publicIps      || {};
   const networkProfiles = initState.networkProfiles;
@@ -221,17 +232,16 @@ async function collectWAN(initState) {
   for (const [uuid, publicIp] of Object.entries(publicIps)) {
     // uuid is actually the intf name when publicIps is keyed by intf
     const profile = profileByUuid[uuid] || profileByIntf[uuid] || {};
-    console.log(`[WAN] profile for ${uuid}:`, JSON.stringify(profile));
     const intf    = profile.intf || uuid;
     const wan = {
       uuid,
       name:       profile.name       || intf,
       intf,
       publicIp,
-      connType:   profile.conn_type  || 'unknown',
+      connType:   deriveWanConnType(profile),
       active:     profile.active     ?? true,
       ready:      profile.ready      ?? true,
-      gateway:    profile.gateway_ip || profile.gateway || null,
+      gateway:    profile.gateway    || profile.gateway_ip || null,
       dns:        Array.isArray(profile.dns) ? profile.dns.join(',') : (profile.dns || null),
       timestamp:  new Date().toISOString(),
     };
