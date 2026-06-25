@@ -215,13 +215,10 @@ async function collectWAN(initState) {
     Object.assign(profileMap, networkProfiles);
   }
 
-  console.log('[WAN] publicIps keys:', Object.keys(publicIps));
-
   const wans = [];
   for (const [uuid, publicIp] of Object.entries(publicIps)) {
     const profile = profileMap[uuid] || {};
     const intf    = profile.intf || uuid;
-    console.log(`[WAN] uuid=${uuid} intf=${intf} ip=${publicIp}`);
     const wan = {
       uuid,
       name:       profile.name       || intf,
@@ -422,7 +419,7 @@ async function collectUsage(fwGroup, initState = {}) {
           const dlMbps   = parseFloat((dlDelta / (deltaMs / 1000) * 8 / 1e6).toFixed(3));
           const ulMbps   = parseFloat((ulDelta / (deltaMs / 1000) * 8 / 1e6).toFixed(3));
           console.log(`[WAN ${intf}] dl=${dlMbps}Mbps ul=${ulMbps}Mbps (delta ${Math.round(deltaMs/1000)}s dl=${dlDelta}B ul=${ulDelta}B)`);
-          const publicIp = (initState.publicIps || {})[uuid] || null;
+          const publicIp = (initState.publicIps || {})[intf] || null;
           await publish(`network/live_stats/wan/${safeName}`, {
             downloadMbps: dlMbps,
             uploadMbps:   ulMbps,
