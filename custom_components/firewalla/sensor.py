@@ -6,6 +6,7 @@ import logging
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -106,7 +107,13 @@ class FirewallaSensorEntity(CoordinatorEntity, SensorEntity):
         self._attr_native_unit_of_measurement = unit_of_measurement
         self._attr_device_class = device_class
         self._attr_state_class = state_class
-        self._attr_entity_category = entity_category
+        if entity_category is not None:
+            try:
+                self._attr_entity_category = EntityCategory(entity_category)
+            except ValueError:
+                self._attr_entity_category = None
+        else:
+            self._attr_entity_category = None
         self._attr_extra_state_attributes = {}
 
     @property

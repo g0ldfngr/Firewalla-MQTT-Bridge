@@ -6,6 +6,7 @@ import logging
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -43,6 +44,7 @@ async def async_setup_entry(
                 topic=f"{prefix}/{entity_conf['topic']}",
                 value_template=entity_conf.get("value_template"),
                 device_class=entity_conf.get("device_class"),
+                entity_category=entity_conf.get("entity_category"),
                 coordinator=coordinator,
                 key=entity_conf["key"],
             )
@@ -80,6 +82,7 @@ class FirewallaBinarySensorEntity(CoordinatorEntity, BinarySensorEntity):
         topic: str,
         value_template: str | None,
         device_class: str | None = None,
+        entity_category: str | None = None,
         coordinator=None,
         key: str = "",
     ) -> None:
@@ -96,6 +99,13 @@ class FirewallaBinarySensorEntity(CoordinatorEntity, BinarySensorEntity):
         self._topic = topic
         self._value_template = value_template
         self._attr_device_class = device_class
+        if entity_category is not None:
+            try:
+                self._attr_entity_category = EntityCategory(entity_category)
+            except ValueError:
+                self._attr_entity_category = None
+        else:
+            self._attr_entity_category = None
 
     @property
     def is_on(self) -> bool | None:
