@@ -215,10 +215,13 @@ async function collectWAN(initState) {
     Object.assign(profileMap, networkProfiles);
   }
 
+  console.log('[WAN] publicIps keys:', Object.keys(publicIps));
+
   const wans = [];
   for (const [uuid, publicIp] of Object.entries(publicIps)) {
     const profile = profileMap[uuid] || {};
     const intf    = profile.intf || uuid;
+    console.log(`[WAN] uuid=${uuid} intf=${intf} ip=${publicIp}`);
     const wan = {
       uuid,
       name:       profile.name       || intf,
