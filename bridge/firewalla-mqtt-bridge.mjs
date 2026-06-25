@@ -221,6 +221,7 @@ async function collectWAN(initState) {
   for (const [uuid, publicIp] of Object.entries(publicIps)) {
     // uuid is actually the intf name when publicIps is keyed by intf
     const profile = profileByUuid[uuid] || profileByIntf[uuid] || {};
+    console.log(`[WAN] profile keys for ${uuid}:`, Object.keys(profile));
     const intf    = profile.intf || uuid;
     const wan = {
       uuid,
