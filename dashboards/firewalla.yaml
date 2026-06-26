@@ -188,26 +188,21 @@ views:
                 name: WAN2 Public IP
                 icon: mdi:ip-network
 
-      # device_class: data_size sensors auto-display in GB/TB in the entities card
-      - type: entities
+      - type: markdown
         title: Monthly Data Usage
-        icon: mdi:chart-bar
-        show_header_toggle: false
-        state_color: true
-        theme: Frosted Glass
-        entities:
-          - entity: sensor.office_firewalla_wan1_download_usage
-            name: WAN1 Download
-            icon: mdi:download
-          - entity: sensor.office_firewalla_wan1_upload_usage
-            name: WAN1 Upload
-            icon: mdi:upload
-          - entity: sensor.office_firewalla_wan2_download_usage
-            name: WAN2 Download
-            icon: mdi:download
-          - entity: sensor.office_firewalla_wan2_upload_usage
-            name: WAN2 Upload
-            icon: mdi:upload
+        content: |
+          {% macro fmt(b) -%}
+          {%- set b = b | float(0) -%}
+          {%- if b >= 1000000000000 -%}{{ (b / 1000000000000) | round(2) }} TB
+          {%- elif b >= 1000000000 -%}{{ (b / 1000000000) | round(2) }} GB
+          {%- elif b >= 1000000 -%}{{ (b / 1000000) | round(1) }} MB
+          {%- else -%}{{ b | int }} B
+          {%- endif -%}
+          {%- endmacro %}
+          | | WAN1 | WAN2 |
+          |---|---|---|
+          | **Download** | {{ fmt(states('sensor.office_firewalla_wan1_download_usage')) }} | {{ fmt(states('sensor.office_firewalla_wan2_download_usage')) }} |
+          | **Upload** | {{ fmt(states('sensor.office_firewalla_wan1_upload_usage')) }} | {{ fmt(states('sensor.office_firewalla_wan2_upload_usage')) }} |
 
   - title: WAN Details
     path: firewalla-wan
