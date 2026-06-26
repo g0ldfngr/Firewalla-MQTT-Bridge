@@ -19,7 +19,7 @@ The bridge authenticates with your Firewalla box using four files. Place them al
 | `fwgroup.json` | Group identity (gid, eid, aid, symmetricKeyCipher, name) |
 | `etp_token.txt` | ETP bearer token |
 
-These files come from the Firewalla MSP / developer API setup. See the [node-firewalla](https://github.com/firewalla/node-firewalla) docs for how to obtain them.
+These files come from the Firewalla MSP / developer API setup. See the [node-firewalla](https://github.com/lesleyxyz/node-firewalla) docs for how to obtain them.
 
 ## Installation
 
