@@ -23,7 +23,7 @@ _LOGGER = logging.getLogger(__name__)
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_MQTT_PREFIX, default=DEFAULT_MQTT_PREFIX): str,
-        vol.Required(CONF_FIREWALLA_IP, default="10.100.255.1"): str,
+        vol.Required(CONF_FIREWALLA_IP, default="192.168.0.1"): str,
     }
 )
 
@@ -70,7 +70,7 @@ class FirewallaOptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_MQTT_PREFIX, default=data.get(CONF_MQTT_PREFIX, DEFAULT_MQTT_PREFIX)
                     ): str,
                     vol.Required(
-                        CONF_FIREWALLA_IP, default=data.get(CONF_FIREWALLA_IP, "10.100.255.1")
+                        CONF_FIREWALLA_IP, default=data.get(CONF_FIREWALLA_IP, "192.168.0.1")
                     ): str,
                 }
             )

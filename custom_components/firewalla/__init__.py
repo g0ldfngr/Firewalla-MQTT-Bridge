@@ -34,7 +34,7 @@ PLATFORMS = ["sensor", "binary_sensor", "text", "number", "device_tracker"]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Firewalla from a config entry."""
     prefix = entry.data.get(CONF_MQTT_PREFIX, DEFAULT_MQTT_PREFIX)
-    fw_ip = entry.data.get(CONF_FIREWALLA_IP, "10.100.255.1")
+    fw_ip = entry.data.get(CONF_FIREWALLA_IP, "192.168.0.1")
 
     client = FirewallaMQTTClient(
         hass=hass,

@@ -56,7 +56,7 @@ All options are set via environment variables in `.env`:
 | `MQTT_PREFIX` | `firewalla` | Topic prefix for all published messages |
 | `MQTT_USERNAME` | *(empty)* | MQTT username — leave blank if no auth |
 | `MQTT_PASSWORD` | *(empty)* | MQTT password |
-| `FIREWALLA_IP` | `10.100.255.1` | LAN IP of your Firewalla box |
+| `FIREWALLA_IP` | `192.168.0.1` | LAN IP of your Firewalla box |
 | `COLLECT_INTERVAL` | `60` | Poll interval in seconds (min 30, max 3600) |
 
 ## MQTT Topics

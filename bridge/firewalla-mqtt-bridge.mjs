@@ -40,7 +40,7 @@ const MQTT_BROKER      = process.env.MQTT_BROKER      || 'tcp://localhost:1883';
 const MQTT_PREFIX      = process.env.MQTT_PREFIX      || 'firewalla';
 const MQTT_USERNAME    = process.env.MQTT_USERNAME    || '';
 const MQTT_PASSWORD    = process.env.MQTT_PASSWORD    || '';
-const FIREWALLA_IP     = process.env.FIREWALLA_IP     || '10.100.255.1';
+const FIREWALLA_IP     = process.env.FIREWALLA_IP     || '192.168.0.1';
 const COLLECT_INTERVAL = parseInt(process.env.COLLECT_INTERVAL || '60', 10);
 const KEYS_DIR         = process.env.FIREWALLA_KEYS_DIR || '/app/credentials';
 
