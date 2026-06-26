@@ -6,40 +6,59 @@ Polls the Firewalla box API on a configurable interval and publishes network dat
 
 - Docker + Docker Compose on your host
 - A running MQTT broker (e.g. Mosquitto) reachable from the container
-- Firewalla credential files exported from your Firewalla account (see below)
+- Node.js 18+ (only needed to run the one-time pairing script)
 
-## Credential Files
+## Pairing
 
-The bridge authenticates with your Firewalla box using four files. Place them all in `bridge/credentials/` before starting the container:
+Before starting the container you need to pair this machine with your Firewalla box. A pairing script at the root of the repo handles the whole process — it generates a key pair, registers with the Firewalla API, and writes the four credential files automatically.
 
-| File | Description |
-|---|---|
-| `etp.private.pem` | ETP private key |
-| `etp.public.pem` | ETP public key |
-| `fwgroup.json` | Group identity (gid, eid, aid, symmetricKeyCipher, name) |
-| `etp_token.txt` | ETP bearer token |
+**In the Firewalla app, before running the script:**
 
-These files come from the Firewalla MSP / developer API setup. See the [node-firewalla](https://github.com/lesleyxyz/node-firewalla) docs for how to obtain them.
+1. Tap your box → Settings → Advanced → Allow Additional Pairing
+2. Enable **Additional Pairing** — a QR code will appear
+3. Screenshot or scan the QR to get its raw JSON value
+
+**Then run:**
+
+```bash
+# From the repo root
+node pair.mjs
+```
+
+The script will prompt for:
+
+- An email address (used as a label in the app — any address works)
+- The QR code JSON you copied from the app
+- Your Firewalla box LAN IP (default `192.168.1.1`)
+
+It polls the Firewalla API until the box confirms the pairing (up to 60 seconds), then writes the credential files:
+
+```text
+bridge/credentials/
+├── etp.private.pem      # RSA private key
+├── etp.public.pem       # RSA public key
+├── fwgroup.json         # Box group identity
+└── etp_token.txt        # ETP bearer token
+```
+
+All files are written with mode `0600`. The credentials directory is bind-mounted read-only into the container.
 
 ## Installation
 
 ```bash
-# 1. Clone the repo (or just copy the bridge/ directory)
+# 1. Clone the repo
 git clone https://github.com/g0ldfngr/Firewalla-MQTT-Bridge.git
-cd Firewalla-MQTT-Bridge/bridge
+cd Firewalla-MQTT-Bridge
 
-# 2. Create the credentials directory and drop in your four credential files
-mkdir credentials
-cp /path/to/etp.private.pem   credentials/
-cp /path/to/etp.public.pem    credentials/
-cp /path/to/fwgroup.json      credentials/
-cp /path/to/etp_token.txt     credentials/
+# 2. Pair with your Firewalla box (writes bridge/credentials/ automatically)
+node pair.mjs
 
-# 3. Configure environment
-cp .env.example .env
-$EDITOR .env          # set MQTT_BROKER, FIREWALLA_IP, credentials, etc.
+# 3. Configure the bridge environment
+cp bridge/.env.example bridge/.env
+$EDITOR bridge/.env     # set MQTT_BROKER, FIREWALLA_IP, etc.
 
 # 4. Build and start
+cd bridge
 docker compose up -d --build
 
 # 5. Tail logs to confirm it's working
@@ -48,7 +67,7 @@ docker compose logs -f
 
 ## Configuration
 
-All options are set via environment variables in `.env`:
+All options are set via environment variables in `bridge/.env`:
 
 | Variable | Default | Description |
 |---|---|---|
@@ -90,13 +109,15 @@ Alternatively, the `configuration.yaml` in the repo's git history (commit `f9815
 
 ```bash
 git pull
-docker compose up -d --build
+cd bridge && docker compose up -d --build
 ```
 
 ## Troubleshooting
 
-**Container exits immediately** — check that all four credential files exist in `credentials/` and are readable.
+**Container exits immediately** — check that all four credential files exist in `bridge/credentials/` and are readable. Re-run `node pair.mjs` from the repo root to regenerate them.
+
+**Pairing script times out** — make sure Additional Pairing is still enabled in the Firewalla app when the script is polling. The QR code expires; if it does, disable and re-enable Additional Pairing to get a fresh one.
 
 **"Cannot reach MQTT broker"** — verify `MQTT_BROKER` in `.env` is correct and the broker is up. The container uses bridge networking by default; make sure the broker IP is reachable from within Docker (use the host's LAN IP, not `localhost`).
 
-**No data after first run** — tail the logs with `docker compose logs -f` and look for `[Bridge] Collection complete.` If you see API errors, your credential files may be expired or incorrect.
+**No data after first run** — tail the logs with `docker compose logs -f` and look for `[Bridge] Collection complete.` If you see API errors, your credential files may be expired — re-run `node pair.mjs` to re-pair.
