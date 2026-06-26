@@ -1,0 +1,58 @@
+# Firewalla HA Template Sensors
+#
+# These sensors provide human-readable formatting for the Firewalla dashboard.
+# Add to your configuration.yaml:
+#
+#   template: !include_dir_merge_list templates/
+#   (or) template: !include templates/firewalla.yaml
+#
+# Replace "office_firewalla" with your entity prefix if different.
+# Your prefix = what you see in Developer Tools → States when filtering "firewalla".
+
+- sensor:
+    # Uptime formatted as "Xd Yh Zm" instead of raw seconds
+    - name: "Firewalla Uptime Formatted"
+      unique_id: firewalla_uptime_formatted
+      icon: mdi:clock-outline
+      state: >
+        {% set t = states('sensor.office_firewalla_uptime') | int(0) %}
+        {% set d = t // 86400 %}
+        {% set h = (t % 86400) // 3600 %}
+        {% set m = (t % 3600) // 60 %}
+        {% if d > 0 %}{{ d }}d {{ h }}h {{ m }}m
+        {%- elif h > 0 %}{{ h }}h {{ m }}m
+        {%- else %}{{ m }}m
+        {%- endif %}
+
+    # Monthly usage in GB (for readable history-graph Y-axis)
+    - name: "Firewalla WAN1 Download GB"
+      unique_id: firewalla_wan1_download_gb
+      icon: mdi:download
+      unit_of_measurement: "GB"
+      state_class: total_increasing
+      state: >
+        {{ (states('sensor.office_firewalla_wan1_download_usage') | float(0) / 1073741824) | round(2) }}
+
+    - name: "Firewalla WAN1 Upload GB"
+      unique_id: firewalla_wan1_upload_gb
+      icon: mdi:upload
+      unit_of_measurement: "GB"
+      state_class: total_increasing
+      state: >
+        {{ (states('sensor.office_firewalla_wan1_upload_usage') | float(0) / 1073741824) | round(2) }}
+
+    - name: "Firewalla WAN2 Download GB"
+      unique_id: firewalla_wan2_download_gb
+      icon: mdi:download
+      unit_of_measurement: "GB"
+      state_class: total_increasing
+      state: >
+        {{ (states('sensor.office_firewalla_wan2_download_usage') | float(0) / 1073741824) | round(2) }}
+
+    - name: "Firewalla WAN2 Upload GB"
+      unique_id: firewalla_wan2_upload_gb
+      icon: mdi:upload
+      unit_of_measurement: "GB"
+      state_class: total_increasing
+      state: >
+        {{ (states('sensor.office_firewalla_wan2_upload_usage') | float(0) / 1073741824) | round(2) }}

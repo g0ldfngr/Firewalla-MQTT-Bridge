@@ -44,6 +44,47 @@ The integration consumes MQTT data and creates native HA entities. **Use the `ha
 5. Go to Settings → Devices & Services → Add Integration → "Firewalla MQTT Bridge"
 6. Configure your MQTT broker and Firewalla IP
 
+## Dashboard
+
+A pre-built Lovelace dashboard is included at [`dashboards/firewalla.yaml`](dashboards/firewalla.yaml).
+
+It provides three views — no HACS frontend cards required, all standard HA card types.
+
+| View | Contents |
+| --- | --- |
+| **Overview** | Status glance (cloud, WAN1/2, alarms, online devices), live throughput graphs, device counts, monthly usage |
+| **WAN Details** | Per-WAN connection info (IP, gateway, type), speedtest results, 7-day speedtest history |
+| **System** | CPU load gauges (1m/5m/15m), memory gauge, 24h history graphs, box info, data plan |
+
+**Install:**
+
+1. Go to **Settings → Dashboards → Add Dashboard**
+2. Toggle **YAML mode** on
+3. Paste the contents of `dashboards/firewalla.yaml`
+
+> Entity IDs assume the default device name **"Firewalla"**. If yours differs, find your exact IDs at **Developer Tools → States** and filter by `firewalla`.
+
+### Template Sensors (optional, recommended)
+
+[`templates/firewalla.yaml`](templates/firewalla.yaml) provides human-readable formatting that the dashboard uses for:
+
+- **Uptime** — converts raw firmware seconds to `Xd Yh Zm` format
+- **Monthly usage history-graph** — converts byte counters to GB for a readable Y-axis (the entities card already auto-converts via `device_class: data_size`)
+
+**Install:**
+
+1. Copy `templates/firewalla.yaml` into your HA config directory (e.g. `config/templates/firewalla.yaml`)
+2. Add to `configuration.yaml`:
+
+   ```yaml
+   template: !include_dir_merge_list templates/
+   ```
+
+3. Restart Home Assistant
+4. Edit `templates/firewalla.yaml` and replace `office_firewalla` with your entity prefix if different
+
+Without the templates loaded, the dashboard still works — the System view uses an inline Jinja `markdown` card to format uptime, and the Monthly Usage trend graph will fall back to the raw `sensor.office_firewalla_wan*_*_usage` byte sensors.
+
 ## MQTT Topics
 
 | Topic | Description |

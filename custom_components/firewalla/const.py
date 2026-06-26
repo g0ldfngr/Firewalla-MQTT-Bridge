@@ -352,7 +352,8 @@ SENSOR_ENTITIES: Final = [
         "name": "Data Plan Total",
         "topic": TOPIC_DATA_PLAN,
         "value_template": "{{ value_json.totalGB }}",
-        "unit_of_measurement": "GB",
+        "unit_of_measurement": "B",
+        "device_class": "data_size",
         "entity_category": "diagnostic",
     },
     {

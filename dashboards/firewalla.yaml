@@ -1,0 +1,340 @@
+title: Firewalla
+views:
+  - title: System
+    path: firewalla-system
+    icon: mdi:server
+    cards:
+
+      # Formatted uptime + key box info in one readable card
+      # (sensor.office_firewalla_uptime is raw seconds from firmware — rendered here as Xd Yh Zm)
+      # If you have templates/firewalla.yaml loaded, replace the state: block with:
+      #   {{ states('sensor.firewalla_uptime_formatted') }}
+      - type: markdown
+        content: |
+          {% set t = states('sensor.office_firewalla_uptime') | int(0) %}
+          {% set d = t // 86400 %}
+          {% set h = (t % 86400) // 3600 %}
+          {% set m = (t % 3600) // 60 %}
+          | | |
+          |---|---|
+          | **Model** | {{ states('sensor.office_firewalla_model') }} |
+          | **Firmware** | {{ states('sensor.office_firewalla_version') }} |
+          | **Uptime** | {% if d > 0 %}{{ d }}d {{ h }}h {{ m }}m{% elif h > 0 %}{{ h }}h {{ m }}m{% else %}{{ m }}m{% endif %} |
+          | **ISP** | {{ states('sensor.office_firewalla_speedtest_isp') }} |
+          | **WAN Links** | {{ states('sensor.office_firewalla_wan_interfaces') }} |
+
+      - type: entities
+        title: Firewalla Box
+        icon: mdi:shield-home
+        entities:
+          - entity: binary_sensor.firewalla_cloud_connected
+            name: Cloud Connected
+          - entity: binary_sensor.firewalla_booting_complete
+            name: Boot Complete
+
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.office_firewalla_cpu_load_1m
+            min: 0
+            max: 4
+            needle: true
+            severity:
+              green: 0
+              yellow: 1.5
+              red: 3
+            name: CPU 1m
+          - type: gauge
+            entity: sensor.office_firewalla_cpu_load_5m
+            min: 0
+            max: 4
+            needle: true
+            severity:
+              green: 0
+              yellow: 1.5
+              red: 3
+            name: CPU 5m
+          - type: gauge
+            entity: sensor.office_firewalla_cpu_load_15m
+            min: 0
+            max: 4
+            needle: true
+            severity:
+              green: 0
+              yellow: 1.5
+              red: 3
+            name: CPU 15m
+          - type: gauge
+            entity: sensor.office_firewalla_memory_usage
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 0
+              yellow: 70
+              red: 85
+            name: Memory
+
+      - type: horizontal-stack
+        cards:
+          - type: history-graph
+            title: CPU Load (24h)
+            hours_to_show: 24
+            refresh_interval: 60
+            entities:
+              - entity: sensor.office_firewalla_cpu_load_1m
+                name: 1m avg
+              - entity: sensor.office_firewalla_cpu_load_5m
+                name: 5m avg
+              - entity: sensor.office_firewalla_cpu_load_15m
+                name: 15m avg
+          - type: history-graph
+            title: Memory Usage (24h)
+            hours_to_show: 24
+            refresh_interval: 60
+            entities:
+              - entity: sensor.office_firewalla_memory_usage
+                name: Memory %
+
+      - type: entities
+        title: Data Plan
+        icon: mdi:sim
+        entities:
+          - entity: binary_sensor.office_firewalla_data_plan_enabled
+            name: Enabled
+          - entity: sensor.office_firewalla_data_plan_total
+            name: Plan Total
+            icon: mdi:database
+          - entity: sensor.office_firewalla_data_plan_reset_day
+            name: Billing Reset Day
+            icon: mdi:calendar-refresh
+
+  - title: Overview
+    path: firewalla
+    icon: mdi:security-network
+    type: masonry
+    cards:
+      - show_name: true
+        show_icon: true
+        show_state: true
+        type: glance
+        title: Firewalla Status
+        columns: 5
+        state_color: true
+        entities:
+          - entity: binary_sensor.firewalla_cloud_connected
+            name: Cloud
+          - entity: binary_sensor.office_firewalla_wan1_active
+            name: WAN1
+          - entity: binary_sensor.office_firewalla_wan2_active
+            name: WAN2
+          - entity: sensor.firewalla_active_alarms
+            name: Alarms
+            icon: mdi:bell-alert
+          - entity: sensor.firewalla_online_devices
+            name: Online
+            icon: mdi:devices
+
+      - type: horizontal-stack
+        cards:
+          - type: history-graph
+            title: WAN1 Live Throughput (Mbit/s)
+            hours_to_show: 1
+            refresh_interval: 30
+            entities:
+              - entity: sensor.office_firewalla_wan1_download_speed
+                name: Download
+              - entity: sensor.office_firewalla_wan1_upload_speed
+                name: Upload
+          - type: history-graph
+            title: WAN2 Live Throughput (Mbit/s)
+            hours_to_show: 1
+            refresh_interval: 30
+            entities:
+              - entity: sensor.office_firewalla_wan2_download_speed
+                name: Download
+              - entity: sensor.office_firewalla_wan2_upload_speed
+                name: Upload
+
+      - type: horizontal-stack
+        cards:
+          - type: entities
+            title: Network Devices
+            icon: mdi:lan
+            entities:
+              - entity: sensor.firewalla_online_devices
+                name: Online
+                icon: mdi:check-network
+              - entity: sensor.firewalla_offline_devices
+                name: Offline
+                icon: mdi:network-off
+              - entity: sensor.firewalla_total_devices
+                name: Total Known
+                icon: mdi:devices
+          - type: entities
+            title: Security
+            icon: mdi:shield-check
+            entities:
+              - entity: sensor.firewalla_active_alarms
+                name: Active Alarms
+                icon: mdi:alert-circle
+              - entity: binary_sensor.firewalla_cloud_connected
+                name: Cloud Connected
+              - entity: sensor.office_firewalla_wan1_public_ip
+                name: WAN1 Public IP
+                icon: mdi:ip-network
+              - entity: sensor.office_firewalla_wan2_public_ip
+                name: WAN2 Public IP
+                icon: mdi:ip-network
+
+      # device_class: data_size sensors auto-display in GB/TB in the entities card
+      - type: entities
+        title: Monthly Data Usage
+        icon: mdi:chart-bar
+        show_header_toggle: false
+        state_color: true
+        theme: Frosted Glass
+        entities:
+          - entity: sensor.office_firewalla_wan1_download_usage
+            name: WAN1 Download
+            icon: mdi:download
+          - entity: sensor.office_firewalla_wan1_upload_usage
+            name: WAN1 Upload
+            icon: mdi:upload
+          - entity: sensor.office_firewalla_wan2_download_usage
+            name: WAN2 Download
+            icon: mdi:download
+          - entity: sensor.office_firewalla_wan2_upload_usage
+            name: WAN2 Upload
+            icon: mdi:upload
+
+  - title: WAN Details
+    path: firewalla-wan
+    icon: mdi:wan
+    cards:
+      - type: horizontal-stack
+        cards:
+          - type: entities
+            title: "WAN1 (eth0) — Primary"
+            icon: mdi:ethernet
+            entities:
+              - entity: binary_sensor.office_firewalla_wan1_active
+                name: Active
+              - entity: binary_sensor.office_firewalla_wan1_ready
+                name: Ready
+              - entity: sensor.office_firewalla_wan1_public_ip
+                name: Public IP
+                icon: mdi:ip
+              - entity: sensor.office_firewalla_wan1_gateway
+                name: Gateway
+                icon: mdi:router-network
+              - entity: sensor.office_firewalla_wan1_connection_type
+                name: Connection Type
+                icon: mdi:connection
+              - type: divider
+              - entity: sensor.office_firewalla_wan1_download_speed
+                name: Live Download
+              - entity: sensor.office_firewalla_wan1_upload_speed
+                name: Live Upload
+          - type: entities
+            title: "WAN2 (eth1) — Secondary"
+            icon: mdi:ethernet
+            entities:
+              - entity: binary_sensor.office_firewalla_wan2_active
+                name: Active
+              - entity: binary_sensor.office_firewalla_wan2_ready
+                name: Ready
+              - entity: sensor.office_firewalla_wan2_public_ip
+                name: Public IP
+                icon: mdi:ip
+              - entity: sensor.office_firewalla_wan2_gateway
+                name: Gateway
+                icon: mdi:router-network
+              - entity: sensor.office_firewalla_wan2_connection_type
+                name: Connection Type
+                icon: mdi:connection
+              - type: divider
+              - entity: sensor.office_firewalla_wan2_download_speed
+                name: Live Download
+              - entity: sensor.office_firewalla_wan2_upload_speed
+                name: Live Upload
+
+      - type: horizontal-stack
+        cards:
+          - type: entities
+            title: WAN1 Speedtest
+            icon: mdi:speedometer
+            entities:
+              - entity: sensor.office_firewalla_wan1_speedtest_download
+                name: Download
+                icon: mdi:download-network
+              - entity: sensor.office_firewalla_wan1_speedtest_upload
+                name: Upload
+                icon: mdi:upload-network
+              - entity: sensor.office_firewalla_wan1_speedtest_latency
+                name: Latency
+                icon: mdi:timer-outline
+              - entity: sensor.office_firewalla_wan1_speedtest_jitter
+                name: Jitter
+                icon: mdi:chart-timeline-variant
+              - entity: sensor.office_firewalla_wan1_speedtest_packet_loss
+                name: Packet Loss
+                icon: mdi:percent
+          - type: entities
+            title: WAN2 Speedtest
+            icon: mdi:speedometer
+            entities:
+              - entity: sensor.office_firewalla_wan2_speedtest_download
+                name: Download
+                icon: mdi:download-network
+              - entity: sensor.office_firewalla_wan2_speedtest_upload
+                name: Upload
+                icon: mdi:upload-network
+              - entity: sensor.office_firewalla_wan2_speedtest_latency
+                name: Latency
+                icon: mdi:timer-outline
+              - entity: sensor.office_firewalla_wan2_speedtest_jitter
+                name: Jitter
+                icon: mdi:chart-timeline-variant
+              - entity: sensor.office_firewalla_wan2_speedtest_packet_loss
+                name: Packet Loss
+                icon: mdi:percent
+
+      - type: horizontal-stack
+        cards:
+          - type: history-graph
+            title: WAN1 Speedtest History (7 days)
+            hours_to_show: 168
+            entities:
+              - entity: sensor.office_firewalla_wan1_speedtest_download
+                name: Download
+              - entity: sensor.office_firewalla_wan1_speedtest_upload
+                name: Upload
+              - entity: sensor.office_firewalla_wan1_speedtest_latency
+                name: Latency
+          - type: history-graph
+            title: WAN2 Speedtest History (7 days)
+            hours_to_show: 168
+            entities:
+              - entity: sensor.office_firewalla_wan2_speedtest_download
+                name: Download
+              - entity: sensor.office_firewalla_wan2_speedtest_upload
+                name: Upload
+              - entity: sensor.office_firewalla_wan2_speedtest_latency
+                name: Latency
+
+      # Uses GB template sensors from templates/firewalla.yaml for a readable Y-axis.
+      # Without the templates loaded, swap these for the raw sensor.office_firewalla_wan*_*_usage entities.
+      - type: history-graph
+        title: Monthly Usage Trend — GB (30 days)
+        hours_to_show: 720
+        entities:
+          - entity: sensor.firewalla_wan1_download_gb
+            name: WAN1 DL
+          - entity: sensor.firewalla_wan1_upload_gb
+            name: WAN1 UL
+          - entity: sensor.firewalla_wan2_download_gb
+            name: WAN2 DL
+          - entity: sensor.firewalla_wan2_upload_gb
+            name: WAN2 UL
