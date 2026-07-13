@@ -10,7 +10,7 @@ import logging
 
 from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -31,15 +31,22 @@ async def async_setup_entry(
     coordinator = data["coordinator"]
     prefix = entry.data.get("mqtt_prefix", "firewalla")
 
-    entities: list[TrackerEntity] = []
+    # Built via a coordinator listener rather than read once here — at initial
+    # setup the retained MQTT hosts message may not have arrived yet, and new
+    # devices can join the network at any time.
+    known_macs: set[str] = set()
 
-    hosts_data = client.received_messages.get(f"{prefix}/network/hosts", {})
-    online_devices = hosts_data.get("online", [])
-    for device in online_devices:
-        mac = device.get("mac", "")
-        if mac:
+    @callback
+    def _add_new_devices() -> None:
+        hosts_data = (coordinator.data or {}).get(f"{prefix}/network/hosts", {})
+        new_entities: list[TrackerEntity] = []
+        for device in hosts_data.get("online", []):
+            mac = device.get("mac", "")
+            if not mac or mac in known_macs:
+                continue
+            known_macs.add(mac)
             mac_underscore = mac.replace(":", "_")
-            entities.append(
+            new_entities.append(
                 FirewallaDeviceTracker(
                     device_name=device.get("name", "Unknown"),
                     mac=mac,
@@ -49,8 +56,11 @@ async def async_setup_entry(
                     prefix=prefix,
                 )
             )
+        if new_entities:
+            async_add_entities(new_entities)
 
-    async_add_entities(entities)
+    _add_new_devices()
+    entry.async_on_unload(coordinator.async_add_listener(_add_new_devices))
 
 
 class FirewallaDeviceTracker(CoordinatorEntity, TrackerEntity):

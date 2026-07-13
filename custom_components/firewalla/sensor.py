@@ -53,17 +53,27 @@ async def async_setup_entry(
                 key=entity_conf["key"],
             )
         )
+    async_add_entities(entities)
 
-    # Per-device sensors from hosts data
-    hosts_data = client.received_messages.get(f"{prefix}/{TOPIC_HOSTS}", {})
-    online_devices = hosts_data.get("online", [])
-    for device in online_devices:
-        mac = device.get("mac", "")
-        if mac:
+    # Per-device sensors from hosts data. Built via a coordinator listener rather
+    # than read once here — at initial setup the retained MQTT hosts message may
+    # not have arrived yet, and new devices can join the network at any time.
+    known_macs: set[str] = set()
+
+    @callback
+    def _add_new_devices() -> None:
+        hosts_data = (coordinator.data or {}).get(f"{prefix}/{TOPIC_HOSTS}", {})
+        new_entities: list[SensorEntity] = []
+        for device in hosts_data.get("online", []):
+            mac = device.get("mac", "")
+            if not mac or mac in known_macs:
+                continue
+            known_macs.add(mac)
             mac_underscore = mac.replace(":", "_")
-            entities.append(
+            device_name = device.get("name", "Unknown")
+            new_entities.append(
                 FirewallaDeviceSensorEntity(
-                    device_name=device.get("name", "Unknown"),
+                    device_name=device_name,
                     mac=mac,
                     mac_underscore=mac_underscore,
                     coordinator=coordinator,
@@ -72,17 +82,20 @@ async def async_setup_entry(
                 )
             )
             for direction in ("download", "upload"):
-                entities.append(
+                new_entities.append(
                     FirewallaDeviceTrafficSensorEntity(
-                        device_name=device.get("name", "Unknown"),
+                        device_name=device_name,
                         mac_underscore=mac_underscore,
                         direction=direction,
                         coordinator=coordinator,
                         prefix=prefix,
                     )
                 )
+        if new_entities:
+            async_add_entities(new_entities)
 
-    async_add_entities(entities)
+    _add_new_devices()
+    entry.async_on_unload(coordinator.async_add_listener(_add_new_devices))
 
 
 class FirewallaSensorEntity(CoordinatorEntity, SensorEntity):
