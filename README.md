@@ -38,11 +38,12 @@ The integration subscribes to the MQTT topics published by the bridge and create
 
 A pre-built Lovelace dashboard is included at [`dashboards/firewalla.yaml`](dashboards/firewalla.yaml).
 
-Three views — no HACS frontend cards required, all standard HA card types:
+Four views — no HACS frontend cards required, all standard HA card types:
 
 | View | Contents |
 |---|---|
 | **Overview** | Status glance (cloud, WAN1/2, alarms, online devices), live throughput graphs, device counts, monthly usage |
+| **Devices** | Per-device live download/upload throughput and online status — built entirely from `integration_entities('firewalla')` and other core Jinja template functions, so new/renamed devices appear automatically with no dashboard edits |
 | **WAN Details** | Per-WAN connection info (IP, gateway, type), speedtest results and history |
 | **System** | CPU load gauges (1m/5m/15m), memory gauge, 24h history graphs, box info, data plan |
 
@@ -118,6 +119,7 @@ All messages are published with `qos: 1` and `retain: true`.
 | WAN1/WAN2 Upload Usage (bytes) | `network/usage/wan/eth0` / `eth1` |
 | WAN1/WAN2 Speedtest Download/Upload/Latency/Jitter/Packet Loss | `network/speedtest/eth0` / `eth1` |
 | Online / Offline / Total Devices | `network/hosts_summary` |
+| Per-device Download/Upload Speed (Mbit/s) | `network/host/<mac>` |
 | Active Alarms | `network/alarms_summary` |
 | CPU Load (1m / 5m / 15m) | `system/metrics` |
 | Memory Usage (%) | `system/metrics` |
@@ -177,3 +179,4 @@ See [`bridge/README.md`](bridge/README.md) for the full Docker environment varia
 - All MQTT messages are retained so HA receives the last known state immediately on subscribe
 - Dual WAN is supported (eth0/eth1); single-WAN setups will simply have empty WAN2 entities
 - Per-device trackers and text entities are created dynamically from the device list
+- Ships a bundled brand icon/logo (`custom_components/firewalla/brand/`) so the integration and its devices show a proper icon instead of the generic default

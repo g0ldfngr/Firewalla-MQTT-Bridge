@@ -9,7 +9,7 @@
  *   firewalla/network/live_stats    - Real-time throughput & connections
  *   firewalla/network/hosts_summary - Online/offline device counts
  *   firewalla/network/hosts         - Full device inventory
- *   firewalla/network/host/<mac>    - Per-device traffic/presence
+ *   firewalla/network/host/<mac>    - Per-device presence, cumulative traffic bytes, live Mbps
  *   firewalla/network/alarms_summary
  *   firewalla/network/alarms
  *   firewalla/network/usage
@@ -49,6 +49,9 @@ const ONLINE_THRESHOLD_MS = 30 * 60 * 1000;
 
 // Per-WAN accumulated counter snapshots for delta-based live throughput calculation
 const prevWanUsage = {};
+
+// Per-device (by mac) accumulated counter snapshots for delta-based live throughput calculation
+const prevHostUsage = {};
 
 // ── Load Credentials ───────────────────────────────────────────────────────
 
@@ -277,11 +280,30 @@ async function collectHosts(fwGroup) {
 
   const onlineDevices  = [];
   const offlineDevices = [];
+  const now = Date.now();
 
   for (const h of hostList) {
     // lastActive is a Unix timestamp in seconds (float) — multiply by 1000 for ms
     const lastActiveMs = h.lastActive ? h.lastActive * 1000 : 0;
-    const isOnline = lastActiveMs > 0 && (Date.now() - lastActiveMs < ONLINE_THRESHOLD_MS);
+    const isOnline = lastActiveMs > 0 && (now - lastActiveMs < ONLINE_THRESHOLD_MS);
+
+    const uploadBytes   = h.flowsummary?.outbytes || 0;
+    const downloadBytes = h.flowsummary?.inbytes  || 0;
+
+    // Live throughput from the delta of accumulated flowsummary counters between
+    // collection cycles (same approach as per-WAN live throughput). Skips the
+    // first cycle for a mac (no previous snapshot) and counter resets (negative delta).
+    let uploadMbps   = 0;
+    let downloadMbps = 0;
+    const prev = prevHostUsage[h.mac];
+    if (prev && (now - prev.ts) >= 1000) {
+      const deltaMs = now - prev.ts;
+      const ulDelta = uploadBytes   >= prev.ul ? uploadBytes   - prev.ul : 0;
+      const dlDelta = downloadBytes >= prev.dl ? downloadBytes - prev.dl : 0;
+      uploadMbps   = parseFloat((ulDelta / (deltaMs / 1000) * 8 / 1e6).toFixed(3));
+      downloadMbps = parseFloat((dlDelta / (deltaMs / 1000) * 8 / 1e6).toFixed(3));
+    }
+    prevHostUsage[h.mac] = { ul: uploadBytes, dl: downloadBytes, ts: now };
 
     const device = {
       name:       h.name || h.dhcpName || h.bonjourName || 'Unknown',
@@ -294,8 +316,10 @@ async function collectHosts(fwGroup) {
       firstFound: h.firstFound ? new Date(h.firstFound * 1000).toISOString() : null,
       online:     isOnline,
       traffic: {
-        uploadBytes:   h.flowsummary?.outbytes || 0,
-        downloadBytes: h.flowsummary?.inbytes  || 0,
+        uploadBytes,
+        downloadBytes,
+        uploadMbps,
+        downloadMbps,
       },
       openPorts: h.openports ? Object.keys(h.openports) : [],
       policies: {

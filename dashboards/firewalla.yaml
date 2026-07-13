@@ -204,6 +204,48 @@ views:
           | **Download** | {{ fmt(states('sensor.office_firewalla_wan1_download_usage')) }} | {{ fmt(states('sensor.office_firewalla_wan2_download_usage')) }} |
           | **Upload** | {{ fmt(states('sensor.office_firewalla_wan1_upload_usage')) }} | {{ fmt(states('sensor.office_firewalla_wan2_upload_usage')) }} |
 
+  - title: Devices
+    path: firewalla-devices
+    icon: mdi:devices
+    cards:
+      - type: entities
+        title: Network Devices
+        icon: mdi:lan
+        entities:
+          - entity: sensor.firewalla_online_devices
+            name: Online
+            icon: mdi:check-network
+          - entity: sensor.firewalla_offline_devices
+            name: Offline
+            icon: mdi:network-off
+          - entity: sensor.firewalla_total_devices
+            name: Total Known
+            icon: mdi:devices
+
+      # Dynamically lists every device the integration created (no hardcoded
+      # entity_ids — new/renamed devices show up automatically). Requires no
+      # extra HACS frontend cards, just core Jinja template functions.
+      - type: markdown
+        title: Live Device Throughput
+        content: |
+          {% set seen = namespace(ids=[]) %}
+          {% for eid in integration_entities('firewalla') %}
+            {% set did = device_id(eid) %}
+            {% if did and did not in seen.ids and device_attr(did, 'via_device_id') %}
+              {% set seen.ids = seen.ids + [did] %}
+            {% endif %}
+          {% endfor %}
+          {% set rows = seen.ids | map('device_attr', 'name') | zip(seen.ids) | sort %}
+          | Device | Status | ⬇ Mbit/s | ⬆ Mbit/s |
+          |---|---|---|---|
+          {% for name, did in rows %}
+          {% set ents = device_entities(did) %}
+          {% set online = ents | select('search', '_online$') | list | first %}
+          {% set dl = ents | select('search', '_download_speed$') | list | first %}
+          {% set ul = ents | select('search', '_upload_speed$') | list | first %}
+          | {{ name }} | {{ '🟢' if online and is_state(online, 'online') else '⚪' }} | {{ '%.2f'|format(states(dl)|float(0)) if dl else '—' }} | {{ '%.2f'|format(states(ul)|float(0)) if ul else '—' }} |
+          {% endfor %}
+
   - title: WAN Details
     path: firewalla-wan
     icon: mdi:wan

@@ -71,6 +71,16 @@ async def async_setup_entry(
                     prefix=prefix,
                 )
             )
+            for direction in ("download", "upload"):
+                entities.append(
+                    FirewallaDeviceTrafficSensorEntity(
+                        device_name=device.get("name", "Unknown"),
+                        mac_underscore=mac_underscore,
+                        direction=direction,
+                        coordinator=coordinator,
+                        prefix=prefix,
+                    )
+                )
 
     async_add_entities(entities)
 
@@ -176,3 +186,44 @@ class FirewallaDeviceSensorEntity(CoordinatorEntity, SensorEntity):
             self._attr_extra_state_attributes["ip"] = payload.get("ip")
             return "online" if payload.get("online") else "offline"
         return None
+
+
+class FirewallaDeviceTrafficSensorEntity(CoordinatorEntity, SensorEntity):
+    """Live upload/download throughput sensor for a single device."""
+
+    _attr_has_entity_name = True
+    _attr_native_unit_of_measurement = "Mbit/s"
+    _attr_device_class = "data_rate"
+    _attr_state_class = "measurement"
+
+    def __init__(
+        self,
+        device_name: str,
+        mac_underscore: str,
+        direction: str,
+        coordinator=None,
+        prefix: str = "firewalla",
+    ) -> None:
+        """Initialize the device traffic sensor."""
+        super().__init__(coordinator)
+        self._mac_underscore = mac_underscore
+        self._direction = direction
+        self._prefix = prefix
+        label = "Download Speed" if direction == "download" else "Upload Speed"
+        self._attr_name = f"{device_name} {label}"
+        self._attr_unique_id = f"firewalla_device_{mac_underscore}_{direction}_mbps"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, mac_underscore)},
+            name=device_name,
+            via_device=(DOMAIN, "firewalla_box"),
+        )
+
+    @property
+    def native_value(self):
+        """Return the live Mbps rate."""
+        topic = f"{self._prefix}/{TOPIC_HOST}/{self._mac_underscore}"
+        payload = self.coordinator.data.get(topic)
+        if not payload:
+            return None
+        key = "downloadMbps" if self._direction == "download" else "uploadMbps"
+        return payload.get("traffic", {}).get(key)
