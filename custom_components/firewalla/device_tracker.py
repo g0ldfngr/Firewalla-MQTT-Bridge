@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.components.device_tracker import SourceType, TrackerEntity
+from homeassistant.components.device_tracker import ScannerEntity, SourceType
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
@@ -39,7 +39,7 @@ async def async_setup_entry(
     @callback
     def _add_new_devices() -> None:
         hosts_data = (coordinator.data or {}).get(f"{prefix}/network/hosts", {})
-        new_entities: list[TrackerEntity] = []
+        new_entities: list[ScannerEntity] = []
         for device in hosts_data.get("online", []):
             mac = device.get("mac", "")
             if not mac or mac in known_macs:
@@ -52,6 +52,7 @@ async def async_setup_entry(
                     mac=mac,
                     mac_underscore=mac_underscore,
                     coordinator=coordinator,
+                    device_id=coordinator._device_id,
                     client=client,
                     prefix=prefix,
                 )
@@ -63,8 +64,14 @@ async def async_setup_entry(
     entry.async_on_unload(coordinator.async_add_listener(_add_new_devices))
 
 
-class FirewallaDeviceTracker(CoordinatorEntity, TrackerEntity):
-    """Representation of a device tracker."""
+class FirewallaDeviceTracker(CoordinatorEntity, ScannerEntity):
+    """Router-based presence tracker for a network device.
+
+    Must be a ScannerEntity, not TrackerEntity: TrackerEntity derives state
+    from GPS/location (so is_connected is ignored and state stays "unknown")
+    and forces a recorder write on every coordinator update, which floods the
+    database because the coordinator updates on every MQTT message.
+    """
 
     _attr_has_entity_name = True
 
@@ -76,6 +83,7 @@ class FirewallaDeviceTracker(CoordinatorEntity, TrackerEntity):
         coordinator=None,
         client=None,
         prefix: str = "firewalla",
+        device_id: str | None = None,
     ) -> None:
         super().__init__(coordinator)
         self._device_name = device_name
@@ -88,7 +96,7 @@ class FirewallaDeviceTracker(CoordinatorEntity, TrackerEntity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, mac_underscore)},
             name=device_name,
-            via_device=(DOMAIN, "firewalla_box"),
+            via_device_id=device_id,
         )
 
     @property
@@ -98,6 +106,8 @@ class FirewallaDeviceTracker(CoordinatorEntity, TrackerEntity):
     @property
     def is_connected(self) -> bool | None:
         topic = f"{self._prefix}/{TOPIC_HOST}/{self._mac_underscore}"
+        if self.coordinator.data is None:
+            return None
         payload = self.coordinator.data.get(topic)
         if payload:
             return bool(payload.get("online"))
@@ -106,6 +116,8 @@ class FirewallaDeviceTracker(CoordinatorEntity, TrackerEntity):
     @property
     def extra_state_attributes(self) -> dict:
         topic = f"{self._prefix}/{TOPIC_HOST}/{self._mac_underscore}"
+        if self.coordinator.data is None:
+            return None
         payload = self.coordinator.data.get(topic)
         if payload:
             return {

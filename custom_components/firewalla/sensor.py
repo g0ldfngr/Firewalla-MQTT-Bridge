@@ -77,6 +77,7 @@ async def async_setup_entry(
                     mac=mac,
                     mac_underscore=mac_underscore,
                     coordinator=coordinator,
+                    device_id=coordinator._device_id,
                     client=client,
                     prefix=prefix,
                 )
@@ -88,6 +89,7 @@ async def async_setup_entry(
                         mac_underscore=mac_underscore,
                         direction=direction,
                         coordinator=coordinator,
+                        device_id=coordinator._device_id,
                         prefix=prefix,
                     )
                 )
@@ -142,6 +144,8 @@ class FirewallaSensorEntity(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         """Return the state."""
+        if self.coordinator.data is None:
+            return None
         payload = self.coordinator.data.get(self._topic)
         if payload is None:
             return None
@@ -170,6 +174,7 @@ class FirewallaDeviceSensorEntity(CoordinatorEntity, SensorEntity):
         coordinator=None,
         client: FirewallaMQTTClient | None = None,
         prefix: str = "firewalla",
+        device_id: str | None = None,
     ) -> None:
         """Initialize the device sensor."""
         super().__init__(coordinator)
@@ -183,7 +188,7 @@ class FirewallaDeviceSensorEntity(CoordinatorEntity, SensorEntity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, mac_underscore)},
             name=device_name,
-            via_device=(DOMAIN, "firewalla_box"),
+            via_device_id=device_id,
         )
         self._attr_extra_state_attributes = {
             "mac": mac,
@@ -194,6 +199,8 @@ class FirewallaDeviceSensorEntity(CoordinatorEntity, SensorEntity):
     def native_value(self):
         """Return the state (online/offline)."""
         topic = f"{self._prefix}/{TOPIC_HOST}/{self._mac_underscore}"
+        if self.coordinator.data is None:
+            return None
         payload = self.coordinator.data.get(topic)
         if payload:
             self._attr_extra_state_attributes["ip"] = payload.get("ip")
@@ -216,6 +223,7 @@ class FirewallaDeviceTrafficSensorEntity(CoordinatorEntity, SensorEntity):
         direction: str,
         coordinator=None,
         prefix: str = "firewalla",
+        device_id: str | None = None,
     ) -> None:
         """Initialize the device traffic sensor."""
         super().__init__(coordinator)
@@ -228,13 +236,15 @@ class FirewallaDeviceTrafficSensorEntity(CoordinatorEntity, SensorEntity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, mac_underscore)},
             name=device_name,
-            via_device=(DOMAIN, "firewalla_box"),
+            via_device_id=device_id,
         )
 
     @property
     def native_value(self):
         """Return the live Mbps rate."""
         topic = f"{self._prefix}/{TOPIC_HOST}/{self._mac_underscore}"
+        if self.coordinator.data is None:
+            return None
         payload = self.coordinator.data.get(topic)
         if not payload:
             return None

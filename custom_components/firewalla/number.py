@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from homeassistant.components.number import NumberEntity
+from homeassistant.const import EntityCategory
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
@@ -47,7 +48,7 @@ class FirewallaCollectIntervalNumber(CoordinatorEntity, NumberEntity):
     _attr_native_max_value = 3600
     _attr_native_step = 30
     _attr_native_unit_of_measurement = "s"
-    _attr_entity_category = "config"
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
         self,

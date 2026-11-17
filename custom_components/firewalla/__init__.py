@@ -15,6 +15,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
@@ -22,6 +23,7 @@ from .const import (
     CONF_MQTT_PREFIX,
     DEFAULT_MQTT_PREFIX,
     DOMAIN,
+    MANUFACTURER,
     NAME,
 )
 from .mqtt_client import FirewallaMQTTClient
@@ -45,12 +47,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = FirewallaCoordinator(hass, client, prefix)
     client.set_coordinator(coordinator)
 
-    await client.connect()
-
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "client": client,
         "coordinator": coordinator,
     }
+
+    # Register the parent Firewalla device so per-device entities can link to
+    # it via via_device_id. Must happen before platforms are forwarded.
+    reg = dr.async_get(hass)
+    fw_device = reg.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "firewalla_box")},
+        name="Firewalla",
+        manufacturer=MANUFACTURER,
+        model="Firewalla Smart Security",
+    )
+    hass.data[DOMAIN][entry.entry_id]["device_id"] = fw_device.id
+    coordinator._device_id = fw_device.id
+
+    await client.connect()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -92,6 +107,7 @@ class FirewallaCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self._client = client
         self._prefix = prefix
+        self._device_id: str | None = None
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Return the latest snapshot of all received MQTT messages."""

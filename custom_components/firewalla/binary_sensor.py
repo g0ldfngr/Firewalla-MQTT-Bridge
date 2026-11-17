@@ -72,6 +72,7 @@ async def async_setup_entry(
                     mac=mac,
                     mac_underscore=mac_underscore,
                     coordinator=coordinator,
+                    device_id=coordinator._device_id,
                     client=client,
                     prefix=prefix,
                 )
@@ -122,6 +123,8 @@ class FirewallaBinarySensorEntity(CoordinatorEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool | None:
         """Return true if the binary sensor is on."""
+        if self.coordinator.data is None:
+            return None
         payload = self.coordinator.data.get(self._topic)
         if payload is None:
             return None
@@ -151,6 +154,7 @@ class FirewallaDeviceBinarySensorEntity(CoordinatorEntity, BinarySensorEntity):
         coordinator=None,
         client: FirewallaMQTTClient | None = None,
         prefix: str = "firewalla",
+        device_id: str | None = None,
     ) -> None:
         """Initialize the device binary sensor."""
         super().__init__(coordinator)
@@ -164,13 +168,15 @@ class FirewallaDeviceBinarySensorEntity(CoordinatorEntity, BinarySensorEntity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, mac_underscore)},
             name=device_name,
-            via_device=(DOMAIN, "firewalla_box"),
+            via_device_id=device_id,
         )
 
     @property
     def is_on(self) -> bool | None:
         """Return true if the device is online."""
         topic = f"{self._prefix}/network/host/{self._mac_underscore}"
+        if self.coordinator.data is None:
+            return None
         payload = self.coordinator.data.get(topic)
         if payload:
             return bool(payload.get("online"))

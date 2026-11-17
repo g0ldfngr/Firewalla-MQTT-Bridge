@@ -48,6 +48,7 @@ async def async_setup_entry(
                     mac=mac,
                     mac_underscore=mac_underscore,
                     coordinator=coordinator,
+                    device_id=coordinator._device_id,
                     client=client,
                     prefix=prefix,
                 )
@@ -72,6 +73,7 @@ class FirewallaDeviceTextEntity(CoordinatorEntity, TextEntity):
         coordinator=None,
         client=None,
         prefix: str = "firewalla",
+        device_id: str | None = None,
     ) -> None:
         """Initialize the text entity."""
         super().__init__(coordinator)
@@ -85,13 +87,15 @@ class FirewallaDeviceTextEntity(CoordinatorEntity, TextEntity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, mac_underscore)},
             name=device_name,
-            via_device=(DOMAIN, "firewalla_box"),
+            via_device_id=device_id,
         )
 
     @property
     def native_value(self) -> str | None:
         """Return the value of the text entity."""
         topic = f"{self._prefix}/{TOPIC_HOST}/{self._mac_underscore}"
+        if self.coordinator.data is None:
+            return None
         payload = self.coordinator.data.get(topic)
         if payload:
             return payload.get("name")

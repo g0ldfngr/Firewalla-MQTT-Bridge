@@ -1,0 +1,7 @@
+rescan:
+  name: Rescan
+  description: Refresh all Firewalla entities from the latest MQTT data.
+
+force_update:
+  name: Force update
+  description: Force an immediate refresh of all Firewalla entities.
