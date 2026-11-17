@@ -10,7 +10,6 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     DOMAIN,
@@ -18,6 +17,7 @@ from .const import (
     BINARY_SENSOR_ENTITIES,
     TOPIC_BOX_INFO,
 )
+from .entity import FirewallaTopicEntity
 from .mqtt_client import FirewallaMQTTClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -84,7 +84,7 @@ async def async_setup_entry(
     entry.async_on_unload(coordinator.async_add_listener(_add_new_devices))
 
 
-class FirewallaBinarySensorEntity(CoordinatorEntity, BinarySensorEntity):
+class FirewallaBinarySensorEntity(FirewallaTopicEntity, BinarySensorEntity):
     """Representation of a Firewalla binary sensor."""
 
     _attr_has_entity_name = True
@@ -110,6 +110,7 @@ class FirewallaBinarySensorEntity(CoordinatorEntity, BinarySensorEntity):
             model="Firewalla Smart Security",
         )
         self._topic = topic
+        self._watched_topic = topic
         self._value_template = value_template
         self._attr_device_class = device_class
         if entity_category is not None:
@@ -141,7 +142,7 @@ class FirewallaBinarySensorEntity(CoordinatorEntity, BinarySensorEntity):
         return bool(payload)
 
 
-class FirewallaDeviceBinarySensorEntity(CoordinatorEntity, BinarySensorEntity):
+class FirewallaDeviceBinarySensorEntity(FirewallaTopicEntity, BinarySensorEntity):
     """Representation of a per-device online binary sensor."""
 
     _attr_has_entity_name = True
@@ -163,6 +164,7 @@ class FirewallaDeviceBinarySensorEntity(CoordinatorEntity, BinarySensorEntity):
         self._mac_underscore = mac_underscore
         self._client = client
         self._prefix = prefix
+        self._watched_topic = f"{prefix}/network/host/{mac_underscore}"
         self._attr_name = f"{device_name} Online"
         self._attr_unique_id = f"firewalla_device_{mac_underscore}_online"
         self._attr_device_info = DeviceInfo(

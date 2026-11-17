@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import logging
 
+from jinja2 import Template
+
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     DOMAIN,
@@ -20,6 +21,7 @@ from .const import (
     TOPIC_HOST,
     TOPIC_HOSTS,
 )
+from .entity import FirewallaTopicEntity
 from .mqtt_client import FirewallaMQTTClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -100,7 +102,7 @@ async def async_setup_entry(
     entry.async_on_unload(coordinator.async_add_listener(_add_new_devices))
 
 
-class FirewallaSensorEntity(CoordinatorEntity, SensorEntity):
+class FirewallaSensorEntity(FirewallaTopicEntity, SensorEntity):
     """Representation of a Firewalla sensor."""
 
     _attr_has_entity_name = True
@@ -128,7 +130,10 @@ class FirewallaSensorEntity(CoordinatorEntity, SensorEntity):
             model="Firewalla Smart Security",
         )
         self._topic = topic
+        self._watched_topic = topic
         self._value_template = value_template
+        # Compile once; compiling on every state read was the main CPU cost.
+        self._template = Template(value_template) if value_template else None
         self._attr_native_unit_of_measurement = unit_of_measurement
         self._attr_device_class = device_class
         self._attr_state_class = state_class
@@ -150,18 +155,16 @@ class FirewallaSensorEntity(CoordinatorEntity, SensorEntity):
         if payload is None:
             return None
 
-        if self._value_template:
-            from jinja2 import Template
+        if self._template is not None:
             try:
-                tmpl = Template(self._value_template)
-                return tmpl.render(value_json=payload)
+                return self._template.render(value_json=payload)
             except Exception:
                 return None
 
         return payload
 
 
-class FirewallaDeviceSensorEntity(CoordinatorEntity, SensorEntity):
+class FirewallaDeviceSensorEntity(FirewallaTopicEntity, SensorEntity):
     """Representation of a per-device Firewalla sensor."""
 
     _attr_has_entity_name = True
@@ -183,6 +186,7 @@ class FirewallaDeviceSensorEntity(CoordinatorEntity, SensorEntity):
         self._mac_underscore = mac_underscore
         self._client = client
         self._prefix = prefix
+        self._watched_topic = f"{prefix}/{TOPIC_HOST}/{mac_underscore}"
         self._attr_name = f"{device_name} Online"
         self._attr_unique_id = f"firewalla_device_{mac_underscore}_online"
         self._attr_device_info = DeviceInfo(
@@ -208,7 +212,7 @@ class FirewallaDeviceSensorEntity(CoordinatorEntity, SensorEntity):
         return None
 
 
-class FirewallaDeviceTrafficSensorEntity(CoordinatorEntity, SensorEntity):
+class FirewallaDeviceTrafficSensorEntity(FirewallaTopicEntity, SensorEntity):
     """Live upload/download throughput sensor for a single device."""
 
     _attr_has_entity_name = True
@@ -230,6 +234,7 @@ class FirewallaDeviceTrafficSensorEntity(CoordinatorEntity, SensorEntity):
         self._mac_underscore = mac_underscore
         self._direction = direction
         self._prefix = prefix
+        self._watched_topic = f"{prefix}/{TOPIC_HOST}/{mac_underscore}"
         label = "Download Speed" if direction == "download" else "Upload Speed"
         self._attr_name = f"{device_name} {label}"
         self._attr_unique_id = f"firewalla_device_{mac_underscore}_{direction}_mbps"

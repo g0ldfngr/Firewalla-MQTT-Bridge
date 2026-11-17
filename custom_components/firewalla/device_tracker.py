@@ -13,9 +13,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MANUFACTURER, TOPIC_HOST
+from .entity import FirewallaTopicEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ async def async_setup_entry(
     entry.async_on_unload(coordinator.async_add_listener(_add_new_devices))
 
 
-class FirewallaDeviceTracker(CoordinatorEntity, ScannerEntity):
+class FirewallaDeviceTracker(FirewallaTopicEntity, ScannerEntity):
     """Router-based presence tracker for a network device.
 
     Must be a ScannerEntity, not TrackerEntity: TrackerEntity derives state
@@ -95,6 +95,7 @@ class FirewallaDeviceTracker(CoordinatorEntity, ScannerEntity):
         self._mac_underscore = mac_underscore
         self._client = client
         self._prefix = prefix
+        self._watched_topic = f"{prefix}/{TOPIC_HOST}/{mac_underscore}"
         self._attr_name = device_name
         self._attr_unique_id = f"firewalla_tracker_{mac_underscore}"
         self._attr_mac_address = mac

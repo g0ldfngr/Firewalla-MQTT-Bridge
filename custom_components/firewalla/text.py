@@ -9,9 +9,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MANUFACTURER, TOPIC_HOST
+from .entity import FirewallaTopicEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ async def async_setup_entry(
     entry.async_on_unload(coordinator.async_add_listener(_add_new_devices))
 
 
-class FirewallaDeviceTextEntity(CoordinatorEntity, TextEntity):
+class FirewallaDeviceTextEntity(FirewallaTopicEntity, TextEntity):
     """Representation of a per-device text entity."""
 
     _attr_has_entity_name = True
@@ -82,6 +82,7 @@ class FirewallaDeviceTextEntity(CoordinatorEntity, TextEntity):
         self._mac_underscore = mac_underscore
         self._client = client
         self._prefix = prefix
+        self._watched_topic = f"{prefix}/{TOPIC_HOST}/{mac_underscore}"
         self._attr_name = f"{device_name} Name"
         self._attr_unique_id = f"firewalla_device_{mac_underscore}_name"
         self._attr_device_info = DeviceInfo(
