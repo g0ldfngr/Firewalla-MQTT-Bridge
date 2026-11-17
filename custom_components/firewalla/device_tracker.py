@@ -71,6 +71,10 @@ class FirewallaDeviceTracker(CoordinatorEntity, ScannerEntity):
     from GPS/location (so is_connected is ignored and state stays "unknown")
     and forces a recorder write on every coordinator update, which floods the
     database because the coordinator updates on every MQTT message.
+
+    ScannerEntity.unique_id returns mac_address, which would discard
+    _attr_unique_id and detach these entities from their existing registry
+    entries, so unique_id is overridden below to keep the original IDs.
     """
 
     _attr_has_entity_name = True
@@ -93,11 +97,17 @@ class FirewallaDeviceTracker(CoordinatorEntity, ScannerEntity):
         self._prefix = prefix
         self._attr_name = device_name
         self._attr_unique_id = f"firewalla_tracker_{mac_underscore}"
+        self._attr_mac_address = mac
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, mac_underscore)},
             name=device_name,
             via_device_id=device_id,
         )
+
+    @property
+    def unique_id(self) -> str | None:
+        """Keep the stable firewalla_tracker_<mac> ID (see class docstring)."""
+        return self._attr_unique_id
 
     @property
     def source_type(self) -> SourceType:
