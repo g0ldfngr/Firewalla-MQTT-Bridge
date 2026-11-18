@@ -131,9 +131,12 @@ class FirewallaDeviceTracker(FirewallaTopicEntity, ScannerEntity):
             return None
         payload = self.coordinator.data.get(topic)
         if payload:
+            # No "last_seen" here: Firewalla republishes every host roughly
+            # every 30 s with a fresh timestamp, so it changed the attributes
+            # (and wrote a recorder row) on every publish even when presence
+            # and IP were unchanged.
             return {
                 "ip_address": payload.get("ip"),
                 "mac_address": self._mac,
-                "last_seen": payload.get("timestamp"),
             }
         return {"mac_address": self._mac}
